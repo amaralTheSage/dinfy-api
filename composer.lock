@@ -6548,18 +6548,14 @@
             "type": "library",
             "extra": {
                 "laravel": {
-                    "providers": [
-                        "Laravel\\Boost\\BoostServiceProvider"
-                    ]
+                    "providers": []
                 },
                 "branch-alias": {
                     "dev-master": "1.x-dev"
                 }
             },
             "autoload": {
-                "psr-4": {
-                    "Laravel\\Boost\\": "src/"
-                }
+                "psr-4": []
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
