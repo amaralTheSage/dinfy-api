@@ -16,11 +16,28 @@ class FinancialAccountAndTransactionSeeder extends Seeder
      */
     public function run(): void
     {
-        /** @var User $user */
-        $user = User::query()->firstOrCreate(
-            ['email' => 't@t'],
-            ['name' => 'Gabriel Amaral', 'password' => 't']
-        );
+        // NOTE: login decides email vs phone using FILTER_VALIDATE_EMAIL, and "t@t" is not considered
+        // a valid email by that filter. Keep the seeded email RFC-valid to avoid login mismatches.
+        $seededEmail = 't@t.com';
+
+        /** @var User|null $legacyUser */
+        $legacyUser = User::query()->where('email', 't@t')->first();
+
+        if ($legacyUser) {
+            $legacyUser->forceFill([
+                'email' => $seededEmail,
+                'name' => 'Gabriel Amaral',
+                'password' => 't',
+            ])->save();
+
+            $user = $legacyUser;
+        } else {
+            /** @var User $user */
+            $user = User::query()->updateOrCreate(
+                ['email' => $seededEmail],
+                ['name' => 'Gabriel Amaral', 'password' => 't']
+            );
+        }
 
         $account = FinancialAccount::query()->updateOrCreate(
             ['id' => '4f61bd6d-e6fc-44b2-9c4b-5609058de7ab'],

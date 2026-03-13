@@ -58,3 +58,10 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
 # dinfy-api
+
+## Local development
+
+After running the seeders, you can log in with:
+
+- `login`: `t@t.com`
+- `password`: `t`
