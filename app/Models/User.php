@@ -62,8 +62,8 @@ class User extends Authenticatable
         return $this->hasMany(FinancialTransaction::class);
     }
 
-    public function sendPasswordResetNotification($token): void
+    public function sendPasswordResetNotification($token, ?string $resetUrl = null): void
     {
-        $this->notify(new PasswordResetTokenNotification((string) $token));
+        $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl));
     }
 }
