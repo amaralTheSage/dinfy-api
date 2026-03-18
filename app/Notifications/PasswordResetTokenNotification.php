@@ -31,25 +31,24 @@ class PasswordResetTokenNotification extends Notification
         }
         $email = rawurlencode((string) $notifiable->getEmailForPasswordReset());
         $token = rawurlencode($this->token);
-
-        $message = (new MailMessage())
-            ->subject('Recuperação de senha - Dinfy')
-            ->greeting('Oi!')
-            ->line('Recebemos uma solicitação para redefinir a senha da sua conta.')
-            ->line('Use o token abaixo no app para definir uma nova senha:')
-            ->line($this->token)
-            ->line("Esse token expira em $expireMinutes minutos.")
-            ->line('Se você não solicitou essa alteração, ignore este e-mail.');
-
+        $resetUrl = null;
         if (is_string($frontendResetUrl) && trim($frontendResetUrl) !== '') {
             $url = rtrim($frontendResetUrl, '/');
             $separator = str_contains($url, '?') ? '&' : '?';
-            $message->action(
-                'Redefinir senha',
-                "{$url}{$separator}token={$token}&email={$email}"
-            );
+            $resetUrl = "{$url}{$separator}token={$token}&email={$email}";
         }
 
-        return $message;
+        return (new MailMessage())
+            ->subject('Recuperação de senha - Dinfy')
+            ->view('emails.password_reset', [
+                'resetUrl' => $resetUrl,
+                'token' => $this->token,
+                'expireMinutes' => $expireMinutes,
+            ])
+            ->text('emails.password_reset_text', [
+                'resetUrl' => $resetUrl,
+                'token' => $this->token,
+                'expireMinutes' => $expireMinutes,
+            ]);
     }
 }
