@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\PasswordResetTokenNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -59,5 +60,10 @@ class User extends Authenticatable
     public function financialTransactions(): HasMany
     {
         return $this->hasMany(FinancialTransaction::class);
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new PasswordResetTokenNotification((string) $token));
     }
 }

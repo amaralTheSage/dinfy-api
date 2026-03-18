@@ -56,6 +56,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend Reset Password URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL can be used in password reset e-mails so the user can open
+    | the app/web page with token and e-mail prefilled.
+    |
+    */
+    'frontend_reset_password_url' => env('FRONTEND_RESET_PASSWORD_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

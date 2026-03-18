@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -71,5 +73,68 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()?->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function forgotPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'string', 'email', 'max:255'],
+        ]);
+
+        /** @var User|null $user */
+        $user = User::query()
+            ->where('email', $validated['email'])
+            ->first();
+
+        if ($user) {
+            $token = Password::broker()->createToken($user);
+            $user->sendPasswordResetNotification($token);
+        }
+
+        return response()->json([
+            'message' => 'Se o e-mail existir na nossa base, voce recebera as instrucoes de recuperacao em instantes.',
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'string', 'email', 'max:255'],
+            'token' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $status = Password::reset(
+            [
+                'email' => $validated['email'],
+                'token' => $validated['token'],
+                'password' => $validated['password'],
+                'password_confirmation' => $request->input('password_confirmation'),
+            ],
+            function (User $user, string $password): void {
+                $user->forceFill([
+                    'password' => $password,
+                    'remember_token' => Str::random(60),
+                ])->save();
+
+                $user->tokens()->delete();
+            }
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return response()->json([
+                'message' => 'Senha redefinida com sucesso.',
+            ]);
+        }
+
+        $message = match ($status) {
+            Password::INVALID_TOKEN => 'Token invalido ou expirado.',
+            Password::INVALID_USER => 'Nao encontramos um usuario com esse e-mail.',
+            default => 'Nao foi possivel redefinir a senha.',
+        };
+
+        throw ValidationException::withMessages([
+            'email' => [$message],
+        ]);
     }
 }
