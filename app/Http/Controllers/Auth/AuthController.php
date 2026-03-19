@@ -79,8 +79,18 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'email' => ['required', 'string', 'email', 'max:255'],
-            'reset_url' => ['nullable', 'url', 'max:2048'],
+            'reset_url' => ['nullable', 'string', 'max:2048'],
         ]);
+
+        if (!empty($validated['reset_url'])) {
+            $parsed = parse_url((string) $validated['reset_url']);
+            $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
+            if ($scheme === '' || !in_array($scheme, ['http', 'https', 'dinfy'], true)) {
+                throw ValidationException::withMessages([
+                    'reset_url' => ['The reset url scheme must be http, https or dinfy.'],
+                ]);
+            }
+        }
 
         /** @var User|null $user */
         $user = User::query()
@@ -93,7 +103,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Se o e-mail existir na nossa base, você receberá as instruções de recuperação em instantes.',
+            'message' => 'Se o e-mail existir na nossa base, voce recebera as instrucoes de recuperacao em instantes.',
         ]);
     }
 
@@ -129,9 +139,9 @@ class AuthController extends Controller
         }
 
         $message = match ($status) {
-            Password::INVALID_TOKEN => 'Token inválido ou expirado.',
-            Password::INVALID_USER => 'Não encontramos um usuário com esse e-mail.',
-            default => 'Não foi possível redefinir a senha.',
+            Password::INVALID_TOKEN => 'Token invalido ou expirado.',
+            Password::INVALID_USER => 'Nao encontramos um usuario com esse e-mail.',
+            default => 'Nao foi possivel redefinir a senha.',
         };
 
         throw ValidationException::withMessages([
