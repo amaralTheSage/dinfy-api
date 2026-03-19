@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\FinancialAccountController;
 use App\Http\Controllers\FinancialTransactionController;
+use App\Http\Controllers\FinancialBudgetController;
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -30,4 +31,5 @@ Route::middleware('auth:sanctum')->group(function () {
         'show',
         'store',
     ]);
+    Route::apiResource('budgets', FinancialBudgetController::class);
 });

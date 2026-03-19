@@ -61,7 +61,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(FinancialTransaction::class);
     }
-
+    public function financialBudgets(): HasMany
+    {
+        return $this->hasMany(FinancialBudget::class);
+    }
     public function sendPasswordResetNotification($token, ?string $resetUrl = null): void
     {
         $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl));
