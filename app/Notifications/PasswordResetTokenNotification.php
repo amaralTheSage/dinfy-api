@@ -32,6 +32,7 @@ class PasswordResetTokenNotification extends Notification
         $email = rawurlencode((string) $notifiable->getEmailForPasswordReset());
         $token = rawurlencode($this->token);
         $resetUrl = null;
+        $deepLinkUrl = "dinfy://reset-password?token={$token}&email={$email}";
         if (is_string($frontendResetUrl) && trim($frontendResetUrl) !== '') {
             $url = rtrim($frontendResetUrl, '/');
             $separator = str_contains($url, '?') ? '&' : '?';
@@ -42,11 +43,13 @@ class PasswordResetTokenNotification extends Notification
             ->subject('Recuperação de senha - Dinfy')
             ->view('emails.password_reset', [
                 'resetUrl' => $resetUrl,
+                'deepLinkUrl' => $deepLinkUrl,
                 'token' => $this->token,
                 'expireMinutes' => $expireMinutes,
             ])
             ->text('emails.password_reset_text', [
                 'resetUrl' => $resetUrl,
+                'deepLinkUrl' => $deepLinkUrl,
                 'token' => $this->token,
                 'expireMinutes' => $expireMinutes,
             ]);

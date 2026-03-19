@@ -46,6 +46,15 @@
                             </td>
                         </tr>
                     @endif
+                    @if (!empty($deepLinkUrl))
+                        <tr>
+                            <td style="padding-bottom:18px;">
+                                <a href="{{ $deepLinkUrl }}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-size:15px;font-weight:600;">
+                                    Abrir no app
+                                </a>
+                            </td>
+                        </tr>
+                    @endif
                     <tr>
                         <td style="font-size:14px;line-height:1.6;color:#4b5563;padding-bottom:6px;">
                             Esse token expira em {{ $expireMinutes }} minutos.
@@ -59,7 +68,20 @@
                     @if (!empty($resetUrl))
                         <tr>
                             <td style="font-size:12px;line-height:1.5;color:#6b7280;padding-top:18px;word-break:break-all;">
-                                Link alternativo: {{ $resetUrl }}
+                                Link alternativo web:
+                                <a href="{{ $resetUrl }}" style="color:#2563eb;text-decoration:underline;word-break:break-all;">
+                                    {{ $resetUrl }}
+                                </a>
+                            </td>
+                        </tr>
+                    @endif
+                    @if (!empty($deepLinkUrl))
+                        <tr>
+                            <td style="font-size:12px;line-height:1.5;color:#6b7280;padding-top:8px;word-break:break-all;">
+                                Link alternativo app:
+                                <a href="{{ $deepLinkUrl }}" style="color:#2563eb;text-decoration:underline;word-break:break-all;">
+                                    {{ $deepLinkUrl }}
+                                </a>
                             </td>
                         </tr>
                     @endif

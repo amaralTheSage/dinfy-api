@@ -103,7 +103,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Se o e-mail existir na nossa base, voce recebera as instrucoes de recuperacao em instantes.',
+            'message' => 'Se o e-mail existir na nossa base, você receberá as instruções de recuperação em instantes.',
         ]);
     }
 
@@ -139,9 +139,9 @@ class AuthController extends Controller
         }
 
         $message = match ($status) {
-            Password::INVALID_TOKEN => 'Token invalido ou expirado.',
-            Password::INVALID_USER => 'Nao encontramos um usuario com esse e-mail.',
-            default => 'Nao foi possivel redefinir a senha.',
+            Password::INVALID_TOKEN => 'Token inválido ou expirado.',
+            Password::INVALID_USER => 'Não encontramos um usuário com esse e-mail.',
+            default => 'Não foi possível redefinir a senha.',
         };
 
         throw ValidationException::withMessages([
