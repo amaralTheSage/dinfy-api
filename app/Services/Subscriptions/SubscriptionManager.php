@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Illuminate\Validation\ValidationException;
 
 class SubscriptionManager
@@ -66,19 +67,13 @@ class SubscriptionManager
         User $user,
         string $planCode,
         ?string $payerEmail = null,
+        ?string $cardTokenId = null,
     ): UserSubscription
     {
         $plan = $this->catalog->get($planCode);
         if (!$plan) {
             throw ValidationException::withMessages([
                 'plan' => ['Plano de assinatura invalido.'],
-            ]);
-        }
-
-        $checkoutPayerEmail = trim((string) ($payerEmail ?? $user->email));
-        if ($checkoutPayerEmail === '') {
-            throw ValidationException::withMessages([
-                'email' => ['O usuario precisa ter um e-mail valido para assinar.'],
             ]);
         }
 
@@ -89,13 +84,23 @@ class SubscriptionManager
             ]);
         }
 
+        $checkoutMode = strtolower(trim((string) ($plan['checkout_mode'] ?? 'subscription_pending')));
         $externalReference = $this->generateExternalReference($user, $planCode);
-        $payload = $this->mercadoPago->createPendingPreapproval(
-            $user,
-            $plan,
-            $externalReference,
-            $checkoutPayerEmail,
-        );
+
+        $payload = match ($checkoutMode) {
+            'subscription_authorized' => $this->mercadoPago->createAuthorizedPreapprovalWithPlan(
+                $plan,
+                $externalReference,
+                $this->resolveAuthorizedPayerEmail($user, $payerEmail),
+                $this->requireCardToken($cardTokenId),
+            ),
+            'subscription_pending' => $this->mercadoPago->createPendingPreapproval(
+                $plan,
+                $externalReference,
+                $this->requirePendingPayerEmail($payerEmail),
+            ),
+            default => throw new RuntimeException('Unsupported subscription checkout mode: ' . $checkoutMode),
+        };
 
         $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
             return UserSubscription::query()->create([
@@ -114,6 +119,42 @@ class SubscriptionManager
         });
 
         return $this->applySubscriptionPayload($subscription, $payload);
+    }
+
+    private function resolveAuthorizedPayerEmail(User $user, ?string $payerEmail = null): string
+    {
+        $resolved = trim((string) ($payerEmail ?? $user->email));
+        if ($resolved === '') {
+            throw ValidationException::withMessages([
+                'email' => ['O usuario precisa ter um e-mail valido para assinar.'],
+            ]);
+        }
+
+        return $resolved;
+    }
+
+    private function requirePendingPayerEmail(?string $payerEmail): string
+    {
+        $resolved = trim((string) $payerEmail);
+        if ($resolved === '') {
+            throw ValidationException::withMessages([
+                'payer_email' => ['Informe o e-mail da conta do Mercado Pago usada no pagamento.'],
+            ]);
+        }
+
+        return $resolved;
+    }
+
+    private function requireCardToken(?string $cardTokenId): string
+    {
+        $resolved = trim((string) $cardTokenId);
+        if ($resolved === '') {
+            throw ValidationException::withMessages([
+                'card_token_id' => ['Informe o token do cartao gerado pelo checkout do Mercado Pago.'],
+            ]);
+        }
+
+        return $resolved;
     }
     public function cancelCurrent(User $user): UserSubscription
     {

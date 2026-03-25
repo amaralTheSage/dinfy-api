@@ -38,12 +38,14 @@ class SubscriptionController extends Controller
         $validated = $request->validate([
             'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
             'payer_email' => ['nullable', 'email:rfc'],
+            'card_token_id' => ['nullable', 'string'],
         ]);
 
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
             (string) $validated['plan'],
             isset($validated['payer_email']) ? (string) $validated['payer_email'] : null,
+            isset($validated['card_token_id']) ? (string) $validated['card_token_id'] : null,
         );
 
         return response()->json([

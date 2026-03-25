@@ -2,7 +2,6 @@
 
 namespace App\Services\Subscriptions;
 
-use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -17,7 +16,6 @@ class MercadoPagoSubscriptionGateway
      * @return array<string, mixed>
      */
     public function createPendingPreapproval(
-        User $user,
         array $plan,
         string $externalReference,
         string $payerEmail,
@@ -35,6 +33,46 @@ class MercadoPagoSubscriptionGateway
             ],
             'back_url' => config('subscriptions.back_url'),
             'status' => 'pending',
+        ];
+
+        $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
+        if ($notificationUrl !== '') {
+            $payload['notification_url'] = $notificationUrl;
+        }
+
+        return $this->request()
+            ->withHeaders([
+                'X-Idempotency-Key' => (string) Str::uuid(),
+            ])
+            ->post('/preapproval', $payload)
+            ->throw()
+            ->json();
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    public function createAuthorizedPreapprovalWithPlan(
+        array $plan,
+        string $externalReference,
+        string $payerEmail,
+        string $cardTokenId,
+    ): array
+    {
+        $preapprovalPlanId = trim((string) ($plan['preapproval_plan_id'] ?? ''));
+        if ($preapprovalPlanId === '') {
+            throw new RuntimeException('Mercado Pago preapproval plan ID is not configured for this subscription plan.');
+        }
+
+        $payload = [
+            'preapproval_plan_id' => $preapprovalPlanId,
+            'reason' => $plan['reason'],
+            'external_reference' => $externalReference,
+            'payer_email' => $payerEmail,
+            'card_token_id' => $cardTokenId,
+            'back_url' => config('subscriptions.back_url'),
+            'status' => 'authorized',
         ];
 
         $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
