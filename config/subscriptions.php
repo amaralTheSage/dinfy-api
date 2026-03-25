@@ -24,7 +24,7 @@ return [
             'frequency' => 12,
             'frequency_type' => 'months',
             'monthly_equivalent' => 8.08,
-            'checkout_mode' => 'annual_checkout',
+            'checkout_mode' => 'subscription_pending',
         ],
     ],
 ];

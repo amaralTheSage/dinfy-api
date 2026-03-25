@@ -95,13 +95,21 @@ it('creates a monthly subscription checkout and stores the local summary', funct
     expect($user->subscription_reference)->toBe('preapp_123');
 });
 
-it('creates a yearly checkout and stores the local summary', function () {
+it('creates a yearly subscription checkout and stores the local summary', function () {
     Http::fake([
-        'https://api.mercadopago.com/checkout/preferences' => Http::response([
-            'id' => 'pref_123',
-            'init_point' => 'https://mp.example/pix-checkout',
-            'sandbox_init_point' => 'https://sandbox.mp.example/pix-checkout',
-            'external_reference' => 'dinfy-u-1-p-yearly-123',
+        'https://api.mercadopago.com/preapproval' => Http::response([
+            'id' => 'preapp_yearly_123',
+            'status' => 'pending',
+            'init_point' => 'https://mp.example/yearly-checkout',
+            'sandbox_init_point' => 'https://sandbox.mp.example/yearly-checkout',
+            'reason' => 'Dinfy Premium - Anual',
+            'auto_recurring' => [
+                'frequency' => 12,
+                'frequency_type' => 'months',
+                'transaction_amount' => 97.00,
+                'currency_id' => 'BRL',
+            ],
+            'date_created' => '2026-03-24T12:00:00.000Z',
         ], 201),
     ]);
 
@@ -119,27 +127,26 @@ it('creates a yearly checkout and stores the local summary', function () {
         ->assertCreated()
         ->assertJsonPath('subscription.plan', 'yearly')
         ->assertJsonPath('subscription.status', 'pending')
-        ->assertJsonPath('subscription.checkout_url', 'https://mp.example/pix-checkout')
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', null);
+        ->assertJsonPath('subscription.checkout_url', 'https://mp.example/yearly-checkout')
+        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_yearly_123');
 
     Http::assertSent(function (HttpRequest $request): bool {
-        return $request->url() === 'https://api.mercadopago.com/checkout/preferences'
-            && $request['payer']['email'] === 'gabriel@example.com'
-            && $request['items'][0]['title'] === 'Anual'
-            && (float) $request['items'][0]['unit_price'] === 97.0
-            && $request['back_urls']['success'] === 'https://dinfy.app/assinatura'
-            && $request['back_urls']['pending'] === 'https://dinfy.app/assinatura'
+        return $request->url() === 'https://api.mercadopago.com/preapproval'
+            && $request['payer_email'] === 'gabriel@example.com'
+            && $request['status'] === 'pending'
+            && $request['back_url'] === 'https://dinfy.app/assinatura'
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
-            && $request['payment_methods']['installments'] === 1
-            && empty($request['payment_methods']['excluded_payment_types']);
+            && $request['auto_recurring']['frequency'] === 12
+            && $request['auto_recurring']['frequency_type'] === 'months'
+            && (float) $request['auto_recurring']['transaction_amount'] === 97.0;
     });
 
     $this->assertDatabaseHas('user_subscriptions', [
         'user_id' => $user->id,
         'plan_code' => 'yearly',
         'status' => 'pending',
-        'checkout_url' => 'https://mp.example/pix-checkout',
-        'mercado_pago_preapproval_id' => null,
+        'checkout_url' => 'https://mp.example/yearly-checkout',
+        'mercado_pago_preapproval_id' => 'preapp_yearly_123',
     ]);
 
     $user->refresh();

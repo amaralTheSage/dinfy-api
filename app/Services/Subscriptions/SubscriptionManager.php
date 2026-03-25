@@ -84,10 +84,6 @@ class SubscriptionManager
             ]);
         }
 
-        if (($plan['checkout_mode'] ?? 'subscription_pending') === 'annual_checkout') {
-            return $this->createAnnualCheckout($user, $plan);
-        }
-
         $externalReference = $this->generateExternalReference($user, $planCode);
         $payload = $this->mercadoPago->createPendingPreapproval($user, $plan, $externalReference);
 
@@ -109,34 +105,6 @@ class SubscriptionManager
 
         return $this->applySubscriptionPayload($subscription, $payload);
     }
-
-    /**
-     * @param array<string, mixed> $plan
-     */
-    private function createAnnualCheckout(User $user, array $plan): UserSubscription
-    {
-        $externalReference = $this->generateExternalReference($user, (string) $plan['code']);
-        $payload = $this->mercadoPago->createAnnualCheckout($user, $plan, $externalReference);
-
-        $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
-            return UserSubscription::query()->create([
-                'user_id' => $user->id,
-                'provider' => (string) config('subscriptions.provider', 'mercado_pago'),
-                'plan_code' => (string) $plan['code'],
-                'plan_name' => (string) $plan['name'],
-                'status' => 'pending',
-                'external_reference' => $externalReference,
-                'reason' => (string) $plan['reason'],
-                'transaction_amount' => (float) $plan['amount'],
-                'currency_id' => (string) $plan['currency_id'],
-                'frequency' => (int) $plan['frequency'],
-                'frequency_type' => (string) $plan['frequency_type'],
-            ]);
-        });
-
-        return $this->applyAnnualPixCheckoutPayload($subscription, $payload);
-    }
-
     public function cancelCurrent(User $user): UserSubscription
     {
         $subscription = $this->currentSubscriptionQuery($user)->first();
@@ -388,27 +356,6 @@ class SubscriptionManager
             'canceled_at' => in_array($status, ['canceled', 'canceled'], true)
                 ? ($this->parseDate(Arr::get($payload, 'last_modified') ?? Arr::get($payload, 'date_modified')) ?? $subscription->canceled_at ?? now())
                 : null,
-            'last_notified_at' => now(),
-            'raw_payload' => $payload,
-        ]);
-
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
-
-        return $subscription->fresh();
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function applyAnnualPixCheckoutPayload(UserSubscription $subscription, array $payload): UserSubscription
-    {
-        $subscription->forceFill([
-            'status' => 'pending',
-            'external_reference' => (string) (Arr::get($payload, 'external_reference') ?? $subscription->external_reference),
-            'checkout_url' => $this->checkoutUrlFromPayload($payload, $subscription->checkout_url),
-            'sandbox_checkout_url' => Arr::get($payload, 'sandbox_init_point', $subscription->sandbox_checkout_url),
             'last_notified_at' => now(),
             'raw_payload' => $payload,
         ]);

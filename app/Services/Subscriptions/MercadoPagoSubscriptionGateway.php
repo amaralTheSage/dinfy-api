@@ -47,52 +47,6 @@ class MercadoPagoSubscriptionGateway
     }
 
     /**
-     * @param array<string, mixed> $plan
-     * @return array<string, mixed>
-     */
-    public function createAnnualCheckout(User $user, array $plan, string $externalReference): array
-    {
-        $backUrl = (string) config('subscriptions.back_url');
-
-        $payload = [
-            'external_reference' => $externalReference,
-            'payer' => [
-                'email' => $user->email,
-            ],
-            'items' => [[
-                'id' => $externalReference,
-                'title' => (string) ($plan['name'] ?? 'Assinatura anual'),
-                'description' => (string) ($plan['reason'] ?? $plan['name'] ?? 'Assinatura anual'),
-                'quantity' => 1,
-                'currency_id' => (string) $plan['currency_id'],
-                'unit_price' => round((float) $plan['amount'], 2),
-            ]],
-            'back_urls' => [
-                'success' => $backUrl,
-                'failure' => $backUrl,
-                'pending' => $backUrl,
-            ],
-            'auto_return' => 'approved',
-            'payment_methods' => [
-                'installments' => 1,
-            ],
-        ];
-
-        $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
-        if ($notificationUrl !== '') {
-            $payload['notification_url'] = $notificationUrl;
-        }
-
-        return $this->request()
-            ->withHeaders([
-                'X-Idempotency-Key' => (string) Str::uuid(),
-            ])
-            ->post('/checkout/preferences', $payload)
-            ->throw()
-            ->json();
-    }
-
-    /**
      * @return array<string, mixed>
      */
     public function fetchPreapproval(string $preapprovalId): array
