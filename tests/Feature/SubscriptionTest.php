@@ -28,10 +28,10 @@ it('lists the available subscription plans', function () {
         ->assertOk()
         ->assertJsonCount(2, 'plans')
         ->assertJsonPath('plans.0.code', 'monthly')
-        ->assertJsonPath('plans.0.amount', 19.9)
+        ->assertJsonPath('plans.0.amount', 0.01)
         ->assertJsonPath('plans.1.code', 'yearly')
-        ->assertJsonPath('plans.1.amount', 97)
-        ->assertJsonPath('plans.1.monthly_equivalent', 8.08);
+        ->assertJsonPath('plans.1.amount', 0.01)
+        ->assertJsonPath('plans.1.monthly_equivalent', 0.01);
 });
 
 it('creates a monthly subscription checkout and stores the local summary', function () {
@@ -45,7 +45,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
             'auto_recurring' => [
                 'frequency' => 1,
                 'frequency_type' => 'months',
-                'transaction_amount' => 19.90,
+                'transaction_amount' => 0.01,
                 'currency_id' => 'BRL',
             ],
             'date_created' => '2026-03-24T12:00:00.000Z',
@@ -77,7 +77,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
             && $request['auto_recurring']['frequency'] === 1
             && $request['auto_recurring']['frequency_type'] === 'months'
-            && (float) $request['auto_recurring']['transaction_amount'] === 19.9;
+            && (float) $request['auto_recurring']['transaction_amount'] === 0.01;
     });
 
     $this->assertDatabaseHas('user_subscriptions', [
@@ -106,7 +106,7 @@ it('creates a yearly subscription checkout and stores the local summary', functi
             'auto_recurring' => [
                 'frequency' => 12,
                 'frequency_type' => 'months',
-                'transaction_amount' => 97.00,
+                'transaction_amount' => 0.01,
                 'currency_id' => 'BRL',
             ],
             'date_created' => '2026-03-24T12:00:00.000Z',
@@ -138,7 +138,7 @@ it('creates a yearly subscription checkout and stores the local summary', functi
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
             && $request['auto_recurring']['frequency'] === 12
             && $request['auto_recurring']['frequency_type'] === 'months'
-            && (float) $request['auto_recurring']['transaction_amount'] === 97.0;
+            && (float) $request['auto_recurring']['transaction_amount'] === 0.01;
     });
 
     $this->assertDatabaseHas('user_subscriptions', [
