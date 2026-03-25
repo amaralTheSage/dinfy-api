@@ -21,7 +21,7 @@ class MercadoPagoSubscriptionGateway
         $payload = [
             'reason' => $plan['reason'],
             'external_reference' => $externalReference,
-            'payer_email' => 'TESTUSER8340370728584051860', # trocar por $user->email
+            'payer_email' => $user->email,
             'auto_recurring' => [
                 'frequency' => $plan['frequency'],
                 'frequency_type' => $plan['frequency_type'],
