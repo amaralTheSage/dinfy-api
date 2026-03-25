@@ -62,7 +62,11 @@ class SubscriptionManager
         return $subscription;
     }
 
-    public function createCheckout(User $user, string $planCode): UserSubscription
+    public function createCheckout(
+        User $user,
+        string $planCode,
+        ?string $payerEmail = null,
+    ): UserSubscription
     {
         $plan = $this->catalog->get($planCode);
         if (!$plan) {
@@ -71,7 +75,8 @@ class SubscriptionManager
             ]);
         }
 
-        if (trim((string) $user->email) === '') {
+        $checkoutPayerEmail = trim((string) ($payerEmail ?? $user->email));
+        if ($checkoutPayerEmail === '') {
             throw ValidationException::withMessages([
                 'email' => ['O usuario precisa ter um e-mail valido para assinar.'],
             ]);
@@ -85,7 +90,12 @@ class SubscriptionManager
         }
 
         $externalReference = $this->generateExternalReference($user, $planCode);
-        $payload = $this->mercadoPago->createPendingPreapproval($user, $plan, $externalReference);
+        $payload = $this->mercadoPago->createPendingPreapproval(
+            $user,
+            $plan,
+            $externalReference,
+            $checkoutPayerEmail,
+        );
 
         $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
             return UserSubscription::query()->create([

@@ -18,6 +18,9 @@ beforeEach(function (): void {
 });
 
 it('lists the available subscription plans', function () {
+    $monthlyPlan = config('subscriptions.plans.monthly');
+    $yearlyPlan = config('subscriptions.plans.yearly');
+
     $user = User::factory()->create();
 
     Sanctum::actingAs($user);
@@ -28,13 +31,15 @@ it('lists the available subscription plans', function () {
         ->assertOk()
         ->assertJsonCount(2, 'plans')
         ->assertJsonPath('plans.0.code', 'monthly')
-        ->assertJsonPath('plans.0.amount', 0.01)
+        ->assertJsonPath('plans.0.amount', (float) $monthlyPlan['amount'])
         ->assertJsonPath('plans.1.code', 'yearly')
-        ->assertJsonPath('plans.1.amount', 0.01)
-        ->assertJsonPath('plans.1.monthly_equivalent', 0.01);
+        ->assertJsonPath('plans.1.amount', (float) $yearlyPlan['amount'])
+        ->assertJsonPath('plans.1.monthly_equivalent', (float) $yearlyPlan['monthly_equivalent']);
 });
 
 it('creates a monthly subscription checkout and stores the local summary', function () {
+    $monthlyPlan = config('subscriptions.plans.monthly');
+
     Http::fake([
         'https://api.mercadopago.com/preapproval' => Http::response([
             'id' => 'preapp_123',
@@ -45,7 +50,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
             'auto_recurring' => [
                 'frequency' => 1,
                 'frequency_type' => 'months',
-                'transaction_amount' => 0.01,
+                'transaction_amount' => (float) $monthlyPlan['amount'],
                 'currency_id' => 'BRL',
             ],
             'date_created' => '2026-03-24T12:00:00.000Z',
@@ -69,7 +74,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
         ->assertJsonPath('subscription.checkout_url', 'https://mp.example/checkout')
         ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_123');
 
-    Http::assertSent(function (HttpRequest $request): bool {
+    Http::assertSent(function (HttpRequest $request) use ($monthlyPlan): bool {
         return $request->url() === 'https://api.mercadopago.com/preapproval'
             && $request['payer_email'] === 'gabriel@example.com'
             && $request['status'] === 'pending'
@@ -77,7 +82,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
             && $request['auto_recurring']['frequency'] === 1
             && $request['auto_recurring']['frequency_type'] === 'months'
-            && (float) $request['auto_recurring']['transaction_amount'] === 0.01;
+            && (float) $request['auto_recurring']['transaction_amount'] === (float) $monthlyPlan['amount'];
     });
 
     $this->assertDatabaseHas('user_subscriptions', [
@@ -95,7 +100,53 @@ it('creates a monthly subscription checkout and stores the local summary', funct
     expect($user->subscription_reference)->toBe('preapp_123');
 });
 
+it('creates checkout with a custom payer email', function () {
+    $monthlyPlan = config('subscriptions.plans.monthly');
+
+    Http::fake([
+        'https://api.mercadopago.com/preapproval' => Http::response([
+            'id' => 'preapp_custom_email_123',
+            'status' => 'pending',
+            'init_point' => 'https://mp.example/checkout',
+            'sandbox_init_point' => 'https://sandbox.mp.example/checkout',
+            'reason' => 'Dinfy Premium - Mensal',
+            'auto_recurring' => [
+                'frequency' => 1,
+                'frequency_type' => 'months',
+                'transaction_amount' => (float) $monthlyPlan['amount'],
+                'currency_id' => 'BRL',
+            ],
+            'date_created' => '2026-03-24T12:00:00.000Z',
+        ], 201),
+    ]);
+
+    $user = User::factory()->create([
+        'email' => 'app-user@example.com',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/subscriptions/checkout', [
+        'plan' => 'monthly',
+        'payer_email' => 'checkout-buyer@example.com',
+    ]);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('subscription.plan', 'monthly')
+        ->assertJsonPath('subscription.status', 'pending')
+        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_custom_email_123');
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        return $request->url() === 'https://api.mercadopago.com/preapproval'
+            && $request['payer_email'] === 'checkout-buyer@example.com'
+            && $request['status'] === 'pending';
+    });
+});
+
 it('creates a yearly subscription checkout and stores the local summary', function () {
+    $yearlyPlan = config('subscriptions.plans.yearly');
+
     Http::fake([
         'https://api.mercadopago.com/preapproval' => Http::response([
             'id' => 'preapp_yearly_123',
@@ -106,7 +157,7 @@ it('creates a yearly subscription checkout and stores the local summary', functi
             'auto_recurring' => [
                 'frequency' => 12,
                 'frequency_type' => 'months',
-                'transaction_amount' => 0.01,
+                'transaction_amount' => (float) $yearlyPlan['amount'],
                 'currency_id' => 'BRL',
             ],
             'date_created' => '2026-03-24T12:00:00.000Z',
@@ -130,7 +181,7 @@ it('creates a yearly subscription checkout and stores the local summary', functi
         ->assertJsonPath('subscription.checkout_url', 'https://mp.example/yearly-checkout')
         ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_yearly_123');
 
-    Http::assertSent(function (HttpRequest $request): bool {
+    Http::assertSent(function (HttpRequest $request) use ($yearlyPlan): bool {
         return $request->url() === 'https://api.mercadopago.com/preapproval'
             && $request['payer_email'] === 'gabriel@example.com'
             && $request['status'] === 'pending'
@@ -138,7 +189,7 @@ it('creates a yearly subscription checkout and stores the local summary', functi
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
             && $request['auto_recurring']['frequency'] === 12
             && $request['auto_recurring']['frequency_type'] === 'months'
-            && (float) $request['auto_recurring']['transaction_amount'] === 0.01;
+            && (float) $request['auto_recurring']['transaction_amount'] === (float) $yearlyPlan['amount'];
     });
 
     $this->assertDatabaseHas('user_subscriptions', [

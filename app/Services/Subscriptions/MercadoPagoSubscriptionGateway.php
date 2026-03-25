@@ -16,12 +16,17 @@ class MercadoPagoSubscriptionGateway
      * @param array<string, mixed> $plan
      * @return array<string, mixed>
      */
-    public function createPendingPreapproval(User $user, array $plan, string $externalReference): array
+    public function createPendingPreapproval(
+        User $user,
+        array $plan,
+        string $externalReference,
+        string $payerEmail,
+    ): array
     {
         $payload = [
             'reason' => $plan['reason'],
             'external_reference' => $externalReference,
-            'payer_email' => $user->email,
+            'payer_email' => $payerEmail,
             'auto_recurring' => [
                 'frequency' => $plan['frequency'],
                 'frequency_type' => $plan['frequency_type'],
