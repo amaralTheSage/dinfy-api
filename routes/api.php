@@ -3,10 +3,13 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\AssistantWebhookController;
+use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\FinancialAccountController;
 use App\Http\Controllers\FinancialTransactionController;
 use App\Http\Controllers\FinancialBudgetController;
+use App\Http\Controllers\SubscriptionController;
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -25,7 +28,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/me/avatar', [MeController::class, 'uploadAvatar']);
     Route::delete('/me/avatar', [MeController::class, 'deleteAvatar']);
 
+    Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);
+    Route::get('/subscriptions/current', [SubscriptionController::class, 'current']);
+    Route::post('/subscriptions/checkout', [SubscriptionController::class, 'checkout']);
+    Route::post('/subscriptions/current/cancel', [SubscriptionController::class, 'cancel']);
+
     Route::apiResource('accounts', FinancialAccountController::class);
+
     Route::apiResource('transactions', FinancialTransactionController::class)->only([
         'index',
         'show',
@@ -33,3 +42,12 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
     Route::apiResource('budgets', FinancialBudgetController::class);
 });
+
+Route::prefix('assistant')
+    ->middleware('assistant.secret')
+    ->group(function () {
+        Route::post('/context', [AssistantWebhookController::class, 'context']);
+        Route::post('/execute', [AssistantWebhookController::class, 'execute']);
+    });
+
+Route::post('/mercado-pago/webhook', MercadoPagoWebhookController::class);

@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MeController extends Controller
 {
@@ -27,9 +30,15 @@ class MeController extends Controller
                 'nullable',
                 'string',
                 'max:30',
-                Rule::unique('users', 'phone')->ignore($user->id),
             ],
         ]);
+
+        if (array_key_exists('phone', $validated)) {
+            $phone = trim((string) ($validated['phone'] ?? ''));
+            $validated['phone'] = $phone !== '' ? $phone : null;
+            $validated['phone_normalized'] = PhoneNormalizer::normalize($validated['phone']);
+            $this->ensurePhoneIsAvailable($validated['phone_normalized'], $user->id);
+        }
 
         $user->fill($validated);
         $user->save();
@@ -77,5 +86,22 @@ class MeController extends Controller
             Storage::disk('public')->delete($relative);
         }
     }
-}
 
+    private function ensurePhoneIsAvailable(?string $phoneNormalized, int $ignoreUserId): void
+    {
+        if (!$phoneNormalized) {
+            return;
+        }
+
+        $exists = User::query()
+            ->where('phone_normalized', $phoneNormalized)
+            ->whereKeyNot($ignoreUserId)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'phone' => ['Este telefone já está em uso.'],
+            ]);
+        }
+    }
+}

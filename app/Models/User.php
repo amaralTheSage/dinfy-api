@@ -6,8 +6,8 @@ namespace App\Models;
 use App\Notifications\PasswordResetTokenNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -26,6 +26,7 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'phone_normalized',
         'password',
     ];
 
@@ -36,6 +37,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'phone_normalized',
         'remember_token',
     ];
 
@@ -49,6 +51,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'subscription_started_at' => 'datetime',
+            'subscription_renews_at' => 'datetime',
+            'subscription_canceled_at' => 'datetime',
         ];
     }
 
@@ -61,10 +66,17 @@ class User extends Authenticatable
     {
         return $this->hasMany(FinancialTransaction::class);
     }
+
     public function financialBudgets(): HasMany
     {
         return $this->hasMany(FinancialBudget::class);
     }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(UserSubscription::class);
+    }
+
     public function sendPasswordResetNotification($token, ?string $resetUrl = null): void
     {
         $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl));
