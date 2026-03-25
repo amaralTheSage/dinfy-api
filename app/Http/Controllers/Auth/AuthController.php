@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -20,14 +21,21 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['nullable', 'string', 'max:30', 'unique:users,phone'],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+
+        $phone = isset($validated['phone']) ? trim((string) $validated['phone']) : null;
+        $phone = $phone !== '' ? $phone : null;
+        $phoneNormalized = PhoneNormalizer::normalize($phone);
+
+        $this->ensurePhoneIsAvailable($phoneNormalized);
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'phone' => $validated['phone'] ?? null,
+            'phone' => $phone,
+            'phone_normalized' => $phoneNormalized,
             'password' => $validated['password'],
         ]);
 
@@ -51,7 +59,18 @@ class AuthController extends Controller
         $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
 
         /** @var User|null $user */
-        $user = User::query()->where($field, $login)->first();
+        $user = $field === 'email'
+            ? User::query()->where('email', $login)->first()
+            : User::query()
+                ->where(function ($query) use ($login): void {
+                    $query->where('phone', $login);
+
+                    $variants = PhoneNormalizer::variants($login);
+                    if ($variants !== []) {
+                        $query->orWhereIn('phone_normalized', $variants);
+                    }
+                })
+                ->first();
 
         if (!$user || !Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
@@ -147,5 +166,24 @@ class AuthController extends Controller
         throw ValidationException::withMessages([
             'email' => [$message],
         ]);
+    }
+
+    private function ensurePhoneIsAvailable(?string $phoneNormalized, ?int $ignoreUserId = null): void
+    {
+        if (!$phoneNormalized) {
+            return;
+        }
+
+        $query = User::query()->where('phone_normalized', $phoneNormalized);
+
+        if ($ignoreUserId !== null) {
+            $query->whereKeyNot($ignoreUserId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'phone' => ['Este telefone já está em uso.'],
+            ]);
+        }
     }
 }
