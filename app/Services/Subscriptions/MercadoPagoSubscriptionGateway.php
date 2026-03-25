@@ -21,7 +21,7 @@ class MercadoPagoSubscriptionGateway
         $payload = [
             'reason' => $plan['reason'],
             'external_reference' => $externalReference,
-            'payer_email' => $user->email,
+            'payer_email' => 'TESTUSER8340370728584051860', # trocar por $user->email
             'auto_recurring' => [
                 'frequency' => $plan['frequency'],
                 'frequency_type' => $plan['frequency_type'],
@@ -64,7 +64,7 @@ class MercadoPagoSubscriptionGateway
         }
 
         $directResponse = $this->request()
-            ->get('/preapproval/'.urlencode($preapprovalId))
+            ->get('/preapproval/' . urlencode($preapprovalId))
             ->throw()
             ->json();
 
@@ -81,7 +81,7 @@ class MercadoPagoSubscriptionGateway
     public function cancelPreapproval(string $preapprovalId): array
     {
         return $this->request()
-            ->put('/preapproval/'.urlencode($preapprovalId), [
+            ->put('/preapproval/' . urlencode($preapprovalId), [
                 'status' => 'canceled',
             ])
             ->throw()
@@ -94,7 +94,7 @@ class MercadoPagoSubscriptionGateway
     public function cancelPayment(string $paymentId): array
     {
         return $this->request()
-            ->put('/v1/payments/'.urlencode($paymentId), [
+            ->put('/v1/payments/' . urlencode($paymentId), [
                 'status' => 'canceled',
             ])
             ->throw()
@@ -107,7 +107,7 @@ class MercadoPagoSubscriptionGateway
     public function fetchPayment(string $paymentId): array
     {
         return $this->request()
-            ->get('/v1/payments/'.urlencode($paymentId))
+            ->get('/v1/payments/' . urlencode($paymentId))
             ->throw()
             ->json();
     }
@@ -118,7 +118,7 @@ class MercadoPagoSubscriptionGateway
     public function fetchAuthorizedPayment(string $authorizedPaymentId): array
     {
         return $this->request()
-            ->get('/authorized_payments/'.urlencode($authorizedPaymentId))
+            ->get('/authorized_payments/' . urlencode($authorizedPaymentId))
             ->throw()
             ->json();
     }
@@ -166,13 +166,13 @@ class MercadoPagoSubscriptionGateway
         $manifestParts = [];
 
         if ($dataId !== '') {
-            $manifestParts[] = 'id:'.strtolower($dataId);
+            $manifestParts[] = 'id:' . strtolower($dataId);
         }
 
-        $manifestParts[] = 'request-id:'.$requestId;
-        $manifestParts[] = 'ts:'.$ts;
+        $manifestParts[] = 'request-id:' . $requestId;
+        $manifestParts[] = 'ts:' . $ts;
 
-        $manifest = implode(';', $manifestParts).';';
+        $manifest = implode(';', $manifestParts) . ';';
 
         $expected = hash_hmac('sha256', $manifest, $secret);
 
