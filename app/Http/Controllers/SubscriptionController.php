@@ -5,14 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\UserSubscription;
 use App\Services\Subscriptions\SubscriptionManager;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
     public function __construct(
         private readonly SubscriptionManager $subscriptions,
-    ) {
-    }
+    ) {}
 
     public function plans()
     {
@@ -35,11 +35,14 @@ class SubscriptionController extends Controller
 
     public function checkout(Request $request)
     {
+        Log::info('Intenção de assinatura criada');
         $validated = $request->validate([
             'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
             'payer_email' => ['nullable', 'email:rfc'],
             'card_token_id' => ['nullable', 'string'],
         ]);
+
+        Log::info('Intenção de assinatura validada. Plano ' + $validated['plan']);
 
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
@@ -47,6 +50,8 @@ class SubscriptionController extends Controller
             isset($validated['payer_email']) ? (string) $validated['payer_email'] : null,
             isset($validated['card_token_id']) ? (string) $validated['card_token_id'] : null,
         );
+
+        Log::info('Assinatura criada para usuário ' + $request->user()->name + ' para o plano ' + $validated['plan']);
 
         return response()->json([
             'subscription' => $this->serializeSubscription($subscription),

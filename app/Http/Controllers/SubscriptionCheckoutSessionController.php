@@ -34,7 +34,7 @@ class SubscriptionCheckoutSessionController extends Controller
 
         if (($plan['checkout_mode'] ?? 'subscription_pending') !== 'subscription_authorized') {
             return response()->json([
-                'message' => 'Este plano não usa o checkout com cartão tokenizado.',
+                'message' => 'Este plano nao usa o checkout com cartao tokenizado.',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
@@ -50,30 +50,17 @@ class SubscriptionCheckoutSessionController extends Controller
         ], Response::HTTP_CREATED);
     }
 
+    public function intro(string $session)
+    {
+        return view('subscriptions.intro', [
+            ...$this->checkoutViewData($session),
+            'checkoutUrl' => route('subscription.checkout.form', ['session' => $session]),
+        ]);
+    }
+
     public function show(string $session)
     {
-        $sessionPayload = $this->sessions->find($session);
-        if (!$sessionPayload) {
-            abort(Response::HTTP_NOT_FOUND);
-        }
-
-        $user = User::query()->find($sessionPayload['user_id']);
-        $plan = $this->catalog->get($sessionPayload['plan_code']);
-        $publicKey = trim((string) config('services.mercadopago.public_key', ''));
-
-        if (!$user || !$plan) {
-            abort(Response::HTTP_NOT_FOUND);
-        }
-
-        return view('subscriptions.checkout', [
-            'sessionId' => $session,
-            'plan' => $plan,
-            'user' => $user,
-            'publicKey' => $publicKey,
-            'completionUrl' => route('subscription.checkout.complete', ['session' => $session]),
-            'returnUrl' => $this->buildAppReturnUrl(),
-            'errorMessage' => $publicKey === '' ? 'Configure a chave pública do Mercado Pago para liberar o checkout.' : null,
-        ]);
+        return view('subscriptions.checkout', $this->checkoutViewData($session));
     }
 
     public function complete(Request $request, string $session): JsonResponse
@@ -85,7 +72,7 @@ class SubscriptionCheckoutSessionController extends Controller
         $sessionPayload = $this->sessions->find($session);
         if (!$sessionPayload) {
             return response()->json([
-                'message' => 'A sessão de pagamento expirou. Volte ao app e tente novamente.',
+                'message' => 'A sessao de pagamento expirou. Volte ao app e tente novamente.',
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -94,7 +81,7 @@ class SubscriptionCheckoutSessionController extends Controller
             $this->sessions->forget($session);
 
             return response()->json([
-                'message' => 'Não foi possível localizar o usuário desta sessão.',
+                'message' => 'Nao foi possivel localizar o usuario desta sessao.',
             ], Response::HTTP_NOT_FOUND);
         }
 
@@ -117,6 +104,35 @@ class SubscriptionCheckoutSessionController extends Controller
                 'message' => 'Assinatura criada com sucesso.',
             ]),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function checkoutViewData(string $session): array
+    {
+        $sessionPayload = $this->sessions->find($session);
+        if (!$sessionPayload) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        $user = User::query()->find($sessionPayload['user_id']);
+        $plan = $this->catalog->get($sessionPayload['plan_code']);
+        $publicKey = trim((string) config('services.mercadopago.public_key', ''));
+
+        if (!$user || !$plan) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        return [
+            'sessionId' => $session,
+            'plan' => $plan,
+            'user' => $user,
+            'publicKey' => $publicKey,
+            'completionUrl' => route('subscription.checkout.complete', ['session' => $session]),
+            'returnUrl' => $this->buildAppReturnUrl(),
+            'errorMessage' => $publicKey === '' ? 'Configure a chave publica do Mercado Pago para liberar o checkout.' : null,
+        ];
     }
 
     /**

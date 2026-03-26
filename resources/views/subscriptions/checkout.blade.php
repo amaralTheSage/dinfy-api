@@ -1,138 +1,257 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dinfy Premium</title>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
         :root {
-            --bg: #f5efe5;
-            --panel: rgba(255, 255, 255, 0.9);
-            --text: #102027;
-            --muted: #52616b;
-            --accent: #0f766e;
-            --accent-soft: rgba(15, 118, 110, 0.12);
-            --border: rgba(16, 32, 39, 0.12);
-            --danger: #b42318;
+            --page-top: #0f3d91;
+            --page-bottom: #7fb7ff;
+            --phone-surface: #f5deb0;
+            --phone-surface-2: #f8e8bf;
+            --card-surface: rgba(255, 247, 228, 0.96);
+            --field-surface: #f9edd0;
+            --field-shadow: rgba(181, 137, 45, 0.08);
+            --text: #17120d;
+            --muted: rgba(23, 18, 13, 0.58);
+            --line: rgba(67, 42, 9, 0.08);
+            --button: #070707;
+            --button-text: #fff8ef;
+            --chip: rgba(8, 37, 92, 0.08);
+            --success: #1f9f63;
+            --success-soft: rgba(31, 159, 99, 0.14);
+            --danger: #d64242;
+            --danger-soft: rgba(214, 66, 66, 0.14);
         }
 
         * {
             box-sizing: border-box;
         }
 
+        html,
+        body {
+            min-height: 100%;
+        }
+
         body {
             margin: 0;
-            min-height: 100vh;
-            font-family: "Montserrat", system-ui, sans-serif;
+            font-family: "Plus Jakarta Sans", "Trebuchet MS", sans-serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 34%),
-                radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.16), transparent 28%),
-                linear-gradient(180deg, #fff9f0 0%, var(--bg) 100%);
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.16), transparent 30%),
+                radial-gradient(circle at 85% 15%, rgba(169, 220, 255, 0.3), transparent 18%),
+                radial-gradient(circle at 20% 90%, rgba(255, 222, 160, 0.2), transparent 24%),
+                linear-gradient(180deg, var(--page-top) 0%, #2964c2 42%, var(--page-bottom) 100%);
         }
 
-        .shell {
-            width: min(960px, calc(100% - 32px));
-            margin: 0 auto;
-            padding: 32px 0 48px;
+        .logo {
+            width: 120px;
         }
 
-        .hero {
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            inset: auto;
+            width: 320px;
+            height: 320px;
+            border-radius: 999px;
+            filter: blur(18px);
+            opacity: 0.34;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        body::before {
+            top: -120px;
+            right: -90px;
+            background: rgba(255, 238, 171, 0.4);
+        }
+
+        body::after {
+            left: -110px;
+            bottom: -120px;
+            background: rgba(217, 239, 255, 0.28);
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
             display: grid;
-            grid-template-columns: 1.1fr 0.9fr;
-            gap: 20px;
-            margin-bottom: 24px;
+            place-items: center;
+            padding: 28px 16px;
         }
 
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--border);
+        .phone {
+            width: min(430px, 100%);
+            border-radius: 42px;
+            padding: 18px;
+            background: linear-gradient(180deg, rgba(255, 248, 230, 0.78) 0%, rgba(243, 220, 171, 0.92) 100%);
+            box-shadow:
+                0 32px 90px rgba(4, 20, 57, 0.34),
+                inset 0 1px 0 rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+        }
+
+        .phone-inner {
+            position: relative;
+            overflow: hidden;
+            border-radius: 32px;
+            padding: 18px 16px 20px;
+            background:
+                radial-gradient(circle at top right, rgba(255, 247, 219, 0.75), transparent 34%),
+                linear-gradient(180deg, var(--phone-surface-2) 0%, var(--phone-surface) 100%);
+        }
+
+        .phone-inner::before {
+            content: "";
+            position: absolute;
+            inset: 10px 10px auto;
+            height: 110px;
             border-radius: 24px;
-            box-shadow: 0 24px 70px rgba(16, 32, 39, 0.1);
-            backdrop-filter: blur(12px);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent);
+            pointer-events: none;
         }
 
-        .summary,
-        .form-panel,
-        .plan-card {
-            padding: 28px;
+        .topbar {
+            position: relative;
+            display: grid;
+            grid-template-columns: 44px 1fr 44px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
         }
 
-        .eyebrow {
+        .topbar-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .topbar-spacer,
+        .back-link {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+        }
+
+        .back-link {
             display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: var(--text);
+            background: rgba(255, 250, 235, 0.82);
+            box-shadow: 0 8px 24px rgba(120, 82, 18, 0.08);
+            font-size: 22px;
+        }
+
+        .summary-strip,
+        .payment-panel,
+        .card-preview,
+        .result-feedback {
+            position: relative;
+            z-index: 1;
+        }
+
+        .summary-strip {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 4px 4px 2px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
             padding: 8px 12px;
             border-radius: 999px;
-            background: var(--accent-soft);
-            color: var(--accent);
+            background: rgba(18, 73, 164, 0.08);
+            color: #123e90;
             font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
+            font-weight: 800;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
         }
 
-        h1 {
-            margin: 16px 0 12px;
-            font-size: clamp(30px, 4vw, 42px);
-            line-height: 1;
-        }
-
-        .lead {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.6;
-        }
-
-        .plan-card {
+        .summary-head {
             display: flex;
-            flex-direction: column;
             justify-content: space-between;
-            background: linear-gradient(160deg, #113a3b 0%, #175f61 100%);
-            color: #fffdf8;
+            gap: 12px;
+            align-items: end;
         }
 
-        .plan-card h2 {
+        .summary-title {
             margin: 0;
-            font-size: 20px;
-        }
-
-        .price {
-            margin: 18px 0 6px;
-            font-size: clamp(34px, 5vw, 48px);
+            font-size: 24px;
             font-weight: 800;
             letter-spacing: -0.04em;
         }
 
-        .price small {
-            font-size: 16px;
+        .summary-price {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: rgba(7, 33, 87, 0.82);
+            white-space: nowrap;
+        }
+
+        .summary-copy,
+        .plan-row,
+        .support-copy {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .plan-row {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px 16px;
             font-weight: 600;
-            opacity: 0.82;
         }
 
-        .plan-meta {
-            display: grid;
-            gap: 10px;
-            margin-top: 16px;
-            font-size: 14px;
-            opacity: 0.9;
+        .payment-panel {
+            padding: 16px;
+            border-radius: 30px;
+            background: var(--card-surface);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow:
+                0 18px 45px rgba(122, 88, 28, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
 
-        .section-title {
-            margin: 0 0 18px;
-            font-size: 20px;
+        .panel-title {
+            margin: 0 0 16px;
+            font-size: 16px;
             font-weight: 700;
         }
 
         .field-grid {
             display: grid;
+            gap: 14px;
+        }
+
+        .field-row {
+            display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px;
+            gap: 12px;
         }
 
         .field,
         .mp-field {
-            display: flex;
-            flex-direction: column;
+            display: grid;
             gap: 8px;
         }
 
@@ -143,9 +262,9 @@
 
         .field label,
         .mp-field label {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
-            color: var(--muted);
+            color: rgba(23, 18, 13, 0.88);
         }
 
         .field input,
@@ -153,17 +272,45 @@
         .mp-box {
             width: 100%;
             min-height: 52px;
+            border: 1px solid transparent;
+            border-radius: 18px;
             padding: 14px 16px;
-            border-radius: 16px;
-            border: 1px solid rgba(16, 32, 39, 0.14);
-            background: rgba(255, 255, 255, 0.9);
-            font-size: 15px;
+            background: var(--field-surface);
+            box-shadow:
+                inset 0 -1px 0 rgba(255, 255, 255, 0.44),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+                0 10px 24px var(--field-shadow);
             color: var(--text);
+            font: inherit;
+            transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .field select {
+            appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, rgba(23, 18, 13, 0.48) 50%),
+                linear-gradient(135deg, rgba(23, 18, 13, 0.48) 50%, transparent 50%);
+            background-position:
+                calc(100% - 18px) calc(50% - 2px),
+                calc(100% - 12px) calc(50% - 2px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+            padding-right: 34px;
+        }
+
+        .field input:focus,
+        .field select:focus,
+        .mp-box:focus-within {
+            outline: none;
+            border-color: rgba(18, 73, 164, 0.28);
+            box-shadow:
+                inset 0 0 0 1px rgba(18, 73, 164, 0.18),
+                0 12px 26px rgba(18, 73, 164, 0.16);
+            transform: translateY(-1px);
         }
 
         .field input[readonly] {
-            color: rgba(16, 32, 39, 0.68);
-            background: rgba(16, 32, 39, 0.04);
+            color: rgba(23, 18, 13, 0.62);
         }
 
         .aux-hidden {
@@ -176,51 +323,49 @@
         }
 
         .status {
-            margin-top: 18px;
-            padding: 14px 16px;
-            border-radius: 16px;
             display: none;
-            font-size: 14px;
-            line-height: 1.5;
+            margin-top: 14px;
+            padding: 13px 14px;
+            border-radius: 18px;
+            font-size: 13px;
+            line-height: 1.45;
         }
 
         .status.is-visible {
             display: block;
         }
 
-        .status.error {
-            background: rgba(180, 35, 24, 0.08);
-            border: 1px solid rgba(180, 35, 24, 0.18);
-            color: var(--danger);
+        .status.success {
+            color: #135f3c;
+            background: var(--success-soft);
         }
 
-        .status.success {
-            background: rgba(15, 118, 110, 0.09);
-            border: 1px solid rgba(15, 118, 110, 0.2);
-            color: var(--accent);
+        .status.error {
+            color: #9d2626;
+            background: var(--danger-soft);
         }
 
         .actions {
-            margin-top: 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: center;
+            display: grid;
+            gap: 10px;
+            margin-top: 18px;
         }
 
         .button {
             appearance: none;
             border: 0;
-            border-radius: 16px;
-            padding: 15px 20px;
-            font-weight: 700;
+            border-radius: 999px;
+            min-height: 56px;
+            padding: 16px 18px;
+            font: inherit;
             font-size: 15px;
+            font-weight: 800;
             cursor: pointer;
-            transition: transform 0.18s ease, opacity 0.18s ease;
-            text-decoration: none;
+            transition: transform 0.2s ease, opacity 0.2s ease;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            text-decoration: none;
         }
 
         .button:hover {
@@ -229,144 +374,362 @@
 
         .button:disabled {
             cursor: wait;
-            opacity: 0.72;
+            opacity: 0.78;
             transform: none;
         }
 
         .button-primary {
-            background: var(--accent);
-            color: #fff;
-            min-width: 220px;
+            background: var(--button);
+            color: var(--button-text);
+            box-shadow: 0 18px 26px rgba(7, 7, 7, 0.22);
         }
 
         .button-secondary {
-            color: var(--text);
-            background: rgba(16, 32, 39, 0.06);
-        }
-
-        .microcopy {
-            margin-top: 14px;
+            min-height: 46px;
             font-size: 13px;
-            color: var(--muted);
+            font-weight: 700;
+            color: rgba(23, 18, 13, 0.72);
+            background: rgba(23, 18, 13, 0.05);
         }
 
-        @media (max-width: 860px) {
-            .hero,
-            .field-grid {
+        .support-copy {
+            margin-top: 12px;
+        }
+
+        .card-preview {
+            margin-top: 18px;
+            padding: 18px 18px 16px;
+            border-radius: 28px;
+            background:
+                radial-gradient(circle at top left, rgba(255, 240, 164, 0.95), transparent 22%),
+                linear-gradient(135deg, #ffd60a 0%, #f8cc0d 45%, #e3b400 100%);
+            box-shadow:
+                0 22px 46px rgba(142, 103, 18, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            animation: float-card 4.8s ease-in-out infinite;
+        }
+
+        .card-preview-top,
+        .card-preview-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-preview-top {
+            margin-bottom: 30px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .wave-icon {
+            font-size: 22px;
+            transform: rotate(90deg);
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+        }
+
+        .chip {
+            width: 38px;
+            height: 28px;
+            border-radius: 8px;
+            background:
+                linear-gradient(180deg, rgba(255, 245, 213, 0.9) 0%, rgba(232, 200, 116, 0.94) 100%);
+            box-shadow:
+                inset 0 0 0 1px rgba(93, 67, 15, 0.16),
+                0 6px 10px rgba(124, 88, 16, 0.22);
+            position: relative;
+        }
+
+        .chip::before,
+        .chip::after {
+            content: "";
+            position: absolute;
+            top: 6px;
+            bottom: 6px;
+            width: 1px;
+            background: rgba(114, 82, 23, 0.26);
+        }
+
+        .chip::before {
+            left: 12px;
+        }
+
+        .chip::after {
+            left: 20px;
+        }
+
+        .card-number {
+            margin: 18px 0 10px;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+
+        .card-preview-bottom {
+            gap: 16px;
+            align-items: end;
+        }
+
+        .card-name,
+        .card-expiry {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .card-name {
+            text-transform: uppercase;
+            max-width: 68%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .result-feedback {
+            display: none;
+            grid-template-columns: auto 1fr;
+            gap: 12px;
+            align-items: center;
+            margin-top: 16px;
+            padding: 14px 16px;
+            border-radius: 22px;
+            background: rgba(255, 250, 241, 0.88);
+            box-shadow: 0 16px 30px rgba(92, 63, 13, 0.08);
+            animation: result-pop 0.32s ease;
+        }
+
+        .result-feedback.is-visible {
+            display: grid;
+        }
+
+        .result-feedback.success {
+            border: 1px solid rgba(31, 159, 99, 0.18);
+        }
+
+        .result-feedback.error {
+            border: 1px solid rgba(214, 66, 66, 0.18);
+        }
+
+        .result-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .result-feedback.success .result-icon {
+            color: #135f3c;
+            background: var(--success-soft);
+        }
+
+        .result-feedback.error .result-icon {
+            color: #9d2626;
+            background: var(--danger-soft);
+        }
+
+        .result-title {
+            margin: 0 0 3px;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .result-message {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .error-panel {
+            display: grid;
+            gap: 12px;
+        }
+
+        @keyframes float-card {
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        @keyframes result-pop {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page {
+                padding: 12px;
+            }
+
+            .phone {
+                border-radius: 30px;
+                padding: 12px;
+            }
+
+            .phone-inner {
+                border-radius: 24px;
+                padding: 16px 14px 18px;
+            }
+
+            .summary-head {
+                flex-direction: column;
+                align-items: start;
+            }
+
+            .field-row {
                 grid-template-columns: 1fr;
             }
 
-            .shell {
-                padding-top: 20px;
+            .card-number {
+                font-size: 24px;
             }
         }
     </style>
 </head>
+
 <body>
-    <div class="shell">
-        <section class="hero">
-            <div class="panel summary">
-                <span class="eyebrow">Dinfy Premium</span>
-                <h1>Pagamento seguro para sua assinatura.</h1>
-                <p class="lead">
-                    Preencha os dados do cartão nesta página. O token do cartão é gerado pelo Mercado Pago e enviado ao Dinfy para criar sua assinatura recorrente.
-                </p>
-                <div class="microcopy">
-                    O e-mail do Dinfy já será usado automaticamente como identificador da assinatura.
-                </div>
+    <main class="page">
+        <section class="phone">
+            <div class="phone-inner">
+                <header class="topbar">
+                    <img src="dinfy_logo.png" alt="" class="logo">
+                    <div class="topbar-spacer" aria-hidden="true"></div>
+                </header>
+
+                <section class="summary-strip">
+                    <div class="summary-head">
+                        <h1 class="summary-title">{{ $plan['name'] }}</h1>
+                        <p class="summary-price">
+                            R$ {{ number_format((float) $plan['amount'], 2, ',', '.') }}
+                            / {{ $plan['frequency'] === 12 ? 'ano' : 'mês' }}
+                        </p>
+                    </div>
+                    <p class="summary-copy">{{ $plan['reason'] }}</p>
+                    <p class="plan-row">
+                        <span>{{ $plan['frequency'] }} {{ $plan['frequency_type'] === 'years' ? 'anos' : 'meses' }}</span>
+                        <span>Pagamento via Mercado Pago</span>
+                    </p>
+                </section>
+
+                <section class="payment-panel">
+                    <h2 class="panel-title">Card Details</h2>
+
+                    @if ($errorMessage)
+                        <div class="error-panel">
+                            <div class="status error is-visible">{{ $errorMessage }}</div>
+                            <a class="button button-secondary" href="{{ $returnUrl }}">Back to app</a>
+                        </div>
+                    @else
+                        <form id="form-checkout">
+                            <div class="field-grid">
+                                <div class="field full">
+                                    <label for="form-checkout__cardholderName">Card Holder Name</label>
+                                    <input type="text" id="form-checkout__cardholderName" autocomplete="cc-name"
+                                        placeholder="Noah Ethan Jeremy" />
+                                </div>
+
+                                <div class="field-row">
+                                    <div class="mp-field">
+                                        <label for="form-checkout__securityCode">CVV</label>
+                                        <div id="form-checkout__securityCode" class="mp-box"></div>
+                                    </div>
+
+                                    <div class="mp-field">
+                                        <label for="form-checkout__expirationDate">Expire Date</label>
+                                        <div id="form-checkout__expirationDate" class="mp-box"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mp-field full">
+                                    <label for="form-checkout__cardNumber">Card Number</label>
+                                    <div id="form-checkout__cardNumber" class="mp-box"></div>
+                                </div>
+
+                                <div class="field-row">
+                                    <div class="field">
+                                        <label for="form-checkout__identificationType">Document Type</label>
+                                        <select id="form-checkout__identificationType"></select>
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="form-checkout__identificationNumber">Document Number</label>
+                                        <input type="text" id="form-checkout__identificationNumber"
+                                            inputmode="numeric" placeholder="12345678900" />
+                                    </div>
+                                </div>
+
+                                <div class="field full">
+                                    <label for="form-checkout__cardholderEmail">Subscription Email</label>
+                                    <input type="email" id="form-checkout__cardholderEmail"
+                                        value="{{ $user->email }}" readonly />
+                                </div>
+
+                                <div class="aux-hidden" aria-hidden="true">
+                                    <select id="form-checkout__issuer"></select>
+                                    <select id="form-checkout__installments"></select>
+                                </div>
+                            </div>
+
+                            <div id="status-box" class="status" aria-live="polite"></div>
+
+                            <div class="actions">
+                                <button type="submit" id="form-checkout__submit" class="button button-primary">
+                                    Add &amp; Pay
+                                </button>
+                                <a class="button button-secondary" href="{{ $returnUrl }}">Back to app</a>
+                            </div>
+
+
+                        </form>
+                    @endif
+                </section>
+
+                <section class="card-preview" aria-hidden="true">
+                    <div class="card-preview-top">
+                        <span class="wave-icon">)))</span>
+                        <span class="brand">VISA</span>
+                    </div>
+
+                    <div class="chip"></div>
+
+                    <div class="card-number">1234 1234 1234 1234</div>
+
+                    <div class="card-preview-bottom">
+                        <div class="card-name" id="card-preview-name">Your Name</div>
+                        <div class="card-expiry">12/28</div>
+                    </div>
+                </section>
+
+                <section id="result-feedback" class="result-feedback" aria-live="polite">
+                    <div id="result-icon" class="result-icon">i</div>
+                    <div>
+                        <p id="result-title" class="result-title">Payment status</p>
+                        <p id="result-message" class="result-message"></p>
+                    </div>
+                </section>
             </div>
-
-            <aside class="panel plan-card">
-                <div>
-                    <h2>{{ $plan['name'] }}</h2>
-                    <div class="price">
-                        R$ {{ number_format((float) $plan['amount'], 2, ',', '.') }}
-                        <small>/ {{ $plan['frequency'] === 12 ? 'ano' : 'mês' }}</small>
-                    </div>
-                    <div>{{ $plan['reason'] }}</div>
-                </div>
-
-                <div class="plan-meta">
-                    <div>Frequência: {{ $plan['frequency'] }} {{ $plan['frequency_type'] }}</div>
-                    <div>E-mail da assinatura: {{ $user->email }}</div>
-                    <div>Pagamento processado pelo Mercado Pago.</div>
-                </div>
-            </aside>
         </section>
-
-        <section class="panel form-panel">
-            <h2 class="section-title">Dados do cartão</h2>
-
-            @if ($errorMessage)
-                <div class="status error is-visible">{{ $errorMessage }}</div>
-                <div class="actions">
-                    <a class="button button-secondary" href="{{ $returnUrl }}">Voltar ao app</a>
-                </div>
-            @else
-                <form id="form-checkout">
-                    <div class="field-grid">
-                        <div class="mp-field full">
-                            <label for="form-checkout__cardNumber">Número do cartão</label>
-                            <div id="form-checkout__cardNumber" class="mp-box"></div>
-                        </div>
-
-                        <div class="mp-field">
-                            <label for="form-checkout__expirationDate">Validade</label>
-                            <div id="form-checkout__expirationDate" class="mp-box"></div>
-                        </div>
-
-                        <div class="mp-field">
-                            <label for="form-checkout__securityCode">Código de segurança</label>
-                            <div id="form-checkout__securityCode" class="mp-box"></div>
-                        </div>
-
-                        <div class="field full">
-                            <label for="form-checkout__cardholderName">Nome impresso no cartão</label>
-                            <input type="text" id="form-checkout__cardholderName" autocomplete="cc-name" />
-                        </div>
-
-                        <div class="field">
-                            <label for="form-checkout__identificationType">Documento</label>
-                            <select id="form-checkout__identificationType"></select>
-                        </div>
-
-                        <div class="field">
-                            <label for="form-checkout__identificationNumber">Número do documento</label>
-                            <input type="text" id="form-checkout__identificationNumber" inputmode="numeric" />
-                        </div>
-
-                        <div class="field full">
-                            <label for="form-checkout__cardholderEmail">E-mail da assinatura</label>
-                            <input
-                                type="email"
-                                id="form-checkout__cardholderEmail"
-                                value="{{ $user->email }}"
-                                readonly
-                            />
-                        </div>
-
-                        <div class="aux-hidden" aria-hidden="true">
-                            <select id="form-checkout__issuer"></select>
-                            <select id="form-checkout__installments"></select>
-                        </div>
-                    </div>
-
-                    <div id="status-box" class="status"></div>
-
-                    <div class="actions">
-                        <button type="submit" id="form-checkout__submit" class="button button-primary">
-                            Confirmar assinatura
-                        </button>
-                        <a class="button button-secondary" href="{{ $returnUrl }}">Voltar ao app</a>
-                    </div>
-
-                    <div class="microcopy">
-                        Ao confirmar, o Dinfy usa o token seguro do cartão para criar sua assinatura no Mercado Pago.
-                    </div>
-                </form>
-            @endif
-        </section>
-    </div>
+    </main>
 
     @if (!$errorMessage)
         <script>
@@ -374,17 +737,45 @@
                 const publicKey = @json($publicKey);
                 const completionUrl = @json($completionUrl);
                 const fallbackReturnUrl = @json($returnUrl);
+
                 const statusBox = document.getElementById('status-box');
                 const submitButton = document.getElementById('form-checkout__submit');
+                const nameInput = document.getElementById('form-checkout__cardholderName');
+                const previewName = document.getElementById('card-preview-name');
+                const resultFeedback = document.getElementById('result-feedback');
+                const resultIcon = document.getElementById('result-icon');
+                const resultTitle = document.getElementById('result-title');
+                const resultMessage = document.getElementById('result-message');
 
                 const showStatus = (message, kind = 'error') => {
                     statusBox.textContent = message;
                     statusBox.className = `status ${kind} is-visible`;
                 };
 
+                const resetStatus = () => {
+                    statusBox.textContent = '';
+                    statusBox.className = 'status';
+                };
+
+                const showResult = (title, message, kind = 'success') => {
+                    resultFeedback.className = `result-feedback ${kind} is-visible`;
+                    resultTitle.textContent = title;
+                    resultMessage.textContent = message;
+                    resultIcon.textContent = kind === 'success' ? '✓' : '!';
+                };
+
+                const hideResult = () => {
+                    resultFeedback.className = 'result-feedback';
+                };
+
                 const setSubmitting = (value) => {
                     submitButton.disabled = value;
-                    submitButton.textContent = value ? 'Processando...' : 'Confirmar assinatura';
+                    submitButton.textContent = value ? 'Processing...' : 'Add & Pay';
+                };
+
+                const syncPreviewName = () => {
+                    const value = nameInput.value.trim();
+                    previewName.textContent = value !== '' ? value.toUpperCase() : 'YOUR NAME';
                 };
 
                 const firstErrorFromPayload = (payload) => {
@@ -405,6 +796,9 @@
                     return null;
                 };
 
+                nameInput.addEventListener('input', syncPreviewName);
+                syncPreviewName();
+
                 const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
 
                 const cardForm = mp.cardForm({
@@ -414,19 +808,19 @@
                         id: 'form-checkout',
                         cardNumber: {
                             id: 'form-checkout__cardNumber',
-                            placeholder: 'Número do cartão',
+                            placeholder: '1234 1234 1234 1234',
                         },
                         expirationDate: {
                             id: 'form-checkout__expirationDate',
-                            placeholder: 'MM/AA',
+                            placeholder: '09/2029',
                         },
                         securityCode: {
                             id: 'form-checkout__securityCode',
-                            placeholder: 'CVV',
+                            placeholder: '222',
                         },
                         cardholderName: {
                             id: 'form-checkout__cardholderName',
-                            placeholder: 'Nome no cartão',
+                            placeholder: 'Noah Ethan Jeremy',
                         },
                         issuer: {
                             id: 'form-checkout__issuer',
@@ -439,28 +833,40 @@
                         },
                         identificationNumber: {
                             id: 'form-checkout__identificationNumber',
-                            placeholder: 'CPF ou documento',
+                            placeholder: '12345678900',
                         },
                         cardholderEmail: {
                             id: 'form-checkout__cardholderEmail',
-                            placeholder: 'seu@email.com',
+                            placeholder: 'you@email.com',
                         },
                     },
                     callbacks: {
                         onFormMounted: (error) => {
                             if (error) {
-                                showStatus('Não foi possível carregar o formulário do Mercado Pago.');
+                                showStatus('We could not load the Mercado Pago card form.');
+                                showResult(
+                                    'Payment unavailable',
+                                    'The secure card fields did not load. Please refresh and try again.',
+                                    'error',
+                                );
                             }
                         },
                         onSubmit: async (event) => {
                             event.preventDefault();
+                            hideResult();
+                            resetStatus();
                             setSubmitting(true);
-                            statusBox.className = 'status';
 
                             try {
                                 const { token } = cardForm.getCardFormData();
+
                                 if (!token) {
-                                    showStatus('Não foi possível gerar o token do cartão. Revise os dados e tente novamente.');
+                                    showStatus('We could not generate the secure card token.');
+                                    showResult(
+                                        'Payment denied',
+                                        'Review your card details and try again.',
+                                        'error',
+                                    );
                                     setSubmitting(false);
                                     return;
                                 }
@@ -479,7 +885,11 @@
                                 const payload = await response.json().catch(() => ({}));
 
                                 if (!response.ok) {
-                                    showStatus(firstErrorFromPayload(payload) ?? 'Não foi possível concluir o pagamento.');
+                                    const message = firstErrorFromPayload(payload) ??
+                                        'The payment could not be completed with this card.';
+
+                                    showStatus(message);
+                                    showResult('Payment denied', message, 'error');
                                     setSubmitting(false);
                                     return;
                                 }
@@ -488,10 +898,23 @@
                                     ? payload.redirect_url.trim()
                                     : fallbackReturnUrl;
 
-                                showStatus('Assinatura criada. Voltando ao app...', 'success');
-                                window.location.href = redirectUrl;
+                                showStatus('Payment accepted. Returning to the app...', 'success');
+                                showResult(
+                                    'Payment accepted',
+                                    'Your subscription is active. Redirecting back to Dinfy...',
+                                    'success',
+                                );
+
+                                window.setTimeout(() => {
+                                    window.location.href = redirectUrl;
+                                }, 1400);
                             } catch (_) {
-                                showStatus('Falha ao enviar o token do cartão. Tente novamente.');
+                                showStatus('We could not send your payment details. Please try again.');
+                                showResult(
+                                    'Connection issue',
+                                    'Your payment was not confirmed because the request failed.',
+                                    'error',
+                                );
                                 setSubmitting(false);
                             }
                         },
@@ -501,4 +924,5 @@
         </script>
     @endif
 </body>
+
 </html>
