@@ -1,8 +1,8 @@
-# Integracao WhatsApp + n8n + Dinfy
+# Integração WhatsApp + n8n + Dinfy
 
 ## Rotas novas
 
-### 1. Buscar contexto do usuario
+### 1. Buscar contexto do usuário
 
 `POST /api/assistant/context`
 
@@ -21,16 +21,16 @@ Body:
 }
 ```
 
-Essa rota resolve o usuario pelo telefone e devolve:
+Essa rota resolve o usuário pelo telefone e devolve:
 
-- contas disponiveis
-- orcamentos
-- transacoes recentes
-- categorias validas
+- contas disponíveis
+- orçamentos
+- transações recentes
+- categorias válidas
 - intents suportadas
-- defaults uteis para o prompt
+- defaults úteis para o prompt
 
-### 2. Executar a intencao interpretada
+### 2. Executar a intenção interpretada
 
 `POST /api/assistant/execute`
 
@@ -56,7 +56,7 @@ Body base:
 }
 ```
 
-`idempotencyKey` deve ser unico por mensagem. Se o n8n reenviar a mesma execucao, a API devolve a resposta anterior com `replayed: true`.
+`idempotencyKey` deve ser único por mensagem. Se o n8n reenviar a mesma execução, a API devolve a resposta anterior com `replayed: true`.
 
 ## Intents suportadas
 
@@ -68,34 +68,34 @@ Body base:
 
 ## Prompt pronto para o n8n
 
-Use o JSON retornado por `/api/assistant/context` como variavel `context`.
-Use a mensagem original do WhatsApp como variavel `user_message`.
-Use a data atual como variavel `today`.
+Use o JSON retornado por `/api/assistant/context` como variável `context`.
+Use a mensagem original do WhatsApp como variável `user_message`.
+Use a data atual como variável `today`.
 
 ```text
-Voce e o interpretador estruturado do assistente financeiro da Dinfy.
+Você é o interpretador estruturado do assistente financeiro da Dinfy.
 
-Sua tarefa e ler a mensagem do usuario e responder APENAS com um JSON valido, sem markdown, sem comentarios e sem texto extra.
+Sua tarefa é ler a mensagem do usuário e responder APENAS com um JSON válido, sem markdown, sem comentários e sem texto extra.
 
-Voce recebera:
+Você receberá:
 - `context`: contexto retornado pela API da Dinfy
-- `user_message`: mensagem do usuario no WhatsApp
+- `user_message`: mensagem do usuário no WhatsApp
 - `today`: data atual no formato YYYY-MM-DD
 
-Sua saida precisa estar pronta para ser enviada ao endpoint `POST /api/assistant/execute`.
+Sua saída precisa estar pronta para ser enviada ao endpoint `POST /api/assistant/execute`.
 
 Regras:
 1. Responda somente JSON.
-2. Nunca invente conta, orcamento, categoria, ID ou valor que nao estejam claros.
+2. Nunca invente conta, orçamento, categoria, ID ou valor que não estejam claros.
 3. Quando precisar de conta, prefira `accountId` usando uma conta existente em `context.accounts`.
-4. Se houver so uma conta em `context.accounts` e o usuario nao especificar conta, voce pode omitir `accountId`.
-5. Para categorias, use de preferencia valores existentes em `context.categories`.
+4. Se houver só uma conta em `context.accounts` e o usuário não especificar conta, você pode omitir `accountId`.
+5. Para categorias, use de preferência valores existentes em `context.categories`.
 6. Para datas relativas:
    - "hoje" = `today`
    - "ontem" = `today - 1 dia`
    - "anteontem" = `today - 2 dias`
-7. Se faltar dado essencial para executar com seguranca, retorne `shouldExecute: false` e preencha `missingFields`.
-8. Se a mensagem nao corresponder a nenhuma intent suportada, use `intent: "unsupported"` e `shouldExecute: false`.
+7. Se faltar dado essencial para executar com segurança, retorne `shouldExecute: false` e preencha `missingFields`.
+8. Se a mensagem não corresponder a nenhuma intent suportada, use `intent: "unsupported"` e `shouldExecute: false`.
 
 Intents suportadas:
 - `create_transaction`
@@ -105,7 +105,7 @@ Intents suportadas:
 - `list_recent_transactions`
 - `unsupported`
 
-Formato obrigatorio da resposta:
+Formato obrigatório da resposta:
 {
   "intent": "create_transaction" | "create_budget" | "get_balance" | "get_budget_status" | "list_recent_transactions" | "unsupported",
   "shouldExecute": true | false,
@@ -117,33 +117,33 @@ Campos por intent:
 
 1. `create_transaction`
 {
-  "accountId": "uuid opcional se houver uma conta so ou se nao estiver claro",
-  "accountName": "nome opcional se necessario",
-  "accountLast4": "4 ultimos digitos opcional",
+  "accountId": "uuid opcional se houver uma conta só ou se não estiver claro",
+  "accountName": "nome opcional se necessário",
+  "accountLast4": "4 últimos dígitos opcional",
   "type": "DEBIT ou CREDIT",
   "amount": 32.0,
   "currency": "BRL",
   "occurredAt": "YYYY-MM-DD ou ISO-8601",
   "description": "texto curto",
   "merchant": "texto curto",
-  "category": "uma categoria valida"
+  "category": "uma categoria válida"
 }
 
 2. `create_budget`
 {
-  "name": "nome do orcamento",
+  "name": "nome do orçamento",
   "targetAmount": 500,
   "currentAmount": 0,
   "currency": "BRL",
   "icon": "opcional",
-  "category": "uma categoria valida"
+  "category": "uma categoria válida"
 }
 
 3. `get_balance`
 {
   "accountId": "uuid opcional",
   "accountName": "nome opcional",
-  "accountLast4": "4 ultimos digitos opcional"
+  "accountLast4": "4 últimos dígitos opcional"
 }
 
 4. `get_budget_status`
@@ -159,7 +159,7 @@ Campos por intent:
   "type": "DEBIT ou CREDIT opcional",
   "accountId": "uuid opcional",
   "accountName": "nome opcional",
-  "accountLast4": "4 ultimos digitos opcional",
+  "accountLast4": "4 últimos dígitos opcional",
   "category": "categoria opcional",
   "startDate": "YYYY-MM-DD opcional",
   "endDate": "YYYY-MM-DD opcional"
@@ -195,7 +195,7 @@ Resposta:
   }
 }
 
-Mensagem: "Cria um orcamento de mercado de 600"
+Mensagem: "Cria um orçamento de mercado de 600"
 Resposta:
 {
   "intent": "create_budget",
@@ -218,5 +218,5 @@ Resposta:
 2. Chamar `/api/assistant/context` com o telefone do remetente.
 3. Montar o prompt com `context`, `user_message` e `today`.
 4. Pedir para o modelo responder somente JSON.
-5. Se `shouldExecute` for `true` e `intent` nao for `unsupported`, chamar `/api/assistant/execute`.
-6. Usar o `summary` ou os objetos retornados pela API para compor a resposta final ao usuario.
+5. Se `shouldExecute` for `true` e `intent` não for `unsupported`, chamar `/api/assistant/execute`.
+6. Usar o `summary` ou os objetos retornados pela API para compor a resposta final ao usuário.

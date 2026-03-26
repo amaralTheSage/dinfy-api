@@ -12,6 +12,7 @@ uses(RefreshDatabase::class);
 beforeEach(function (): void {
     config()->set('services.mercadopago.base_url', 'https://api.mercadopago.com');
     config()->set('services.mercadopago.access_token', 'test-token');
+    config()->set('services.mercadopago.public_key', 'test-public-key');
     config()->set('services.mercadopago.webhook_secret', '');
     config()->set('subscriptions.back_url', 'https://dinfy.app/assinatura');
     config()->set('subscriptions.notification_url', 'https://api.dinfy.app/api/mercado-pago/webhook');
@@ -39,6 +40,129 @@ it('lists the available subscription plans', function () {
         ->assertJsonPath('plans.1.code', 'yearly')
         ->assertJsonPath('plans.1.amount', (float) $yearlyPlan['amount'])
         ->assertJsonPath('plans.1.monthly_equivalent', (float) $yearlyPlan['monthly_equivalent']);
+});
+
+it('creates a hosted checkout session for an authorized subscription plan', function () {
+    Http::fake();
+
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/subscriptions/checkout/session', [
+        'plan' => 'monthly',
+    ]);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('session.plan', 'monthly');
+
+    $checkoutPageUrl = $response->json('session.checkout_page_url');
+
+    expect($checkoutPageUrl)->toBeString();
+    expect($checkoutPageUrl)->toContain('/subscriptions/checkout/session/');
+
+    Http::assertNothingSent();
+});
+
+it('renders the hosted checkout page for a valid session', function () {
+    Http::fake();
+
+    $user = User::factory()->create([
+        'email' => 'checkout-page@example.com',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $sessionResponse = $this->postJson('/api/subscriptions/checkout/session', [
+        'plan' => 'monthly',
+    ]);
+
+    $sessionResponse->assertCreated();
+
+    $sessionId = (string) $sessionResponse->json('session.id');
+
+    $response = $this->get("/subscriptions/checkout/session/{$sessionId}");
+
+    $response
+        ->assertOk()
+        ->assertSee('Pagamento seguro para sua assinatura.', false)
+        ->assertSee('checkout-page@example.com', false)
+        ->assertSee('Confirmar assinatura', false);
+
+    Http::assertNothingSent();
+});
+
+it('rejects hosted checkout sessions for plans that still use pending checkout', function () {
+    config()->set('subscriptions.plans.monthly.checkout_mode', 'subscription_pending');
+
+    Http::fake();
+
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/subscriptions/checkout/session', [
+        'plan' => 'monthly',
+    ]);
+
+    $response->assertUnprocessable();
+
+    Http::assertNothingSent();
+});
+
+it('completes a hosted checkout session with a card token', function () {
+    $monthlyPlan = config('subscriptions.plans.monthly');
+
+    Http::fake([
+        'https://api.mercadopago.com/preapproval' => Http::response([
+            'id' => 'preapp_session_123',
+            'preapproval_plan_id' => 'preplan_monthly_123',
+            'status' => 'authorized',
+            'reason' => 'Dinfy Premium - Mensal',
+            'auto_recurring' => [
+                'frequency' => 1,
+                'frequency_type' => 'months',
+                'transaction_amount' => (float) $monthlyPlan['amount'],
+                'currency_id' => 'BRL',
+            ],
+            'date_created' => '2026-03-24T12:00:00.000Z',
+            'next_payment_date' => '2026-04-24T12:00:00.000Z',
+        ], 201),
+    ]);
+
+    $user = User::factory()->create([
+        'email' => 'checkout@example.com',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $sessionResponse = $this->postJson('/api/subscriptions/checkout/session', [
+        'plan' => 'monthly',
+    ]);
+
+    $sessionResponse->assertCreated();
+
+    $sessionId = (string) $sessionResponse->json('session.id');
+
+    $response = $this->postJson("/api/subscriptions/checkout/session/{$sessionId}/complete", [
+        'card_token_id' => 'card_token_session_123',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('subscription.plan', 'monthly')
+        ->assertJsonPath('subscription.status', 'authorized');
+
+    expect((string) $response->json('redirect_url'))->toStartWith('dinfy://subscription?');
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        return $request->url() === 'https://api.mercadopago.com/preapproval'
+            && $request['preapproval_plan_id'] === 'preplan_monthly_123'
+            && $request['payer_email'] === 'checkout@example.com'
+            && $request['card_token_id'] === 'card_token_session_123'
+            && $request['status'] === 'authorized';
+    });
 });
 
 it('creates a monthly subscription checkout and stores the local summary', function () {

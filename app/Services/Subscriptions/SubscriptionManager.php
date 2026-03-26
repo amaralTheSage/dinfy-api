@@ -21,7 +21,7 @@ class SubscriptionManager
             when status in ('authorized', 'active') then 0
             when status = 'pending' then 1
             when status = 'paused' then 2
-            when status in ('canceled', 'canceled') then 3
+            when status = 'canceled' then 3
             else 4
         end
     ";
@@ -73,14 +73,14 @@ class SubscriptionManager
         $plan = $this->catalog->get($planCode);
         if (!$plan) {
             throw ValidationException::withMessages([
-                'plan' => ['Plano de assinatura invalido.'],
+                'plan' => ['Plano de assinatura inválido.'],
             ]);
         }
 
         $current = $this->currentSubscriptionQuery($user)->first();
         if ($current && in_array($current->status, self::OPEN_STATUSES, true)) {
             throw ValidationException::withMessages([
-                'plan' => ['Ja existe uma assinatura em andamento para este usuario.'],
+                'plan' => ['Já existe uma assinatura em andamento para este usuário.'],
             ]);
         }
 
@@ -126,7 +126,7 @@ class SubscriptionManager
         $resolved = trim((string) ($payerEmail ?? $user->email));
         if ($resolved === '') {
             throw ValidationException::withMessages([
-                'email' => ['O usuario precisa ter um e-mail valido para assinar.'],
+                'email' => ['O usuário precisa ter um e-mail válido para assinar.'],
             ]);
         }
 
@@ -150,12 +150,13 @@ class SubscriptionManager
         $resolved = trim((string) $cardTokenId);
         if ($resolved === '') {
             throw ValidationException::withMessages([
-                'card_token_id' => ['Informe o token do cartao gerado pelo checkout do Mercado Pago.'],
+                'card_token_id' => ['Informe o token do cartão gerado pelo checkout do Mercado Pago.'],
             ]);
         }
 
         return $resolved;
     }
+
     public function cancelCurrent(User $user): UserSubscription
     {
         $subscription = $this->currentSubscriptionQuery($user)->first();
