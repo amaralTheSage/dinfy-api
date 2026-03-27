@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dinfy Premium</title>
+    <title>Dinfy </title>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -34,6 +34,7 @@
         html,
         body {
             min-height: 100%;
+            
         }
 
         body {
@@ -41,7 +42,7 @@
             font-family: "Plus Jakarta Sans", sans-serif;
             color: var(--text);
             background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.4));
+            rgba(255, 255, 255, 0.86);
         }
 
         .logo {
@@ -65,13 +66,11 @@
         body::before {
             top: -120px;
             right: -90px;
-            background: rgba(255, 238, 171, 0.4);
         }
 
         body::after {
             left: -110px;
             bottom: -120px;
-            background: rgba(217, 239, 255, 0.28);
         }
 
         .page {
@@ -88,14 +87,16 @@
 
             padding-inline: 18px;
           
-
+    background:
+            rgba(255, 255, 255, 0.86);
         }
 
         .phone-inner {
             position: relative;
             overflow: hidden;
 
-       
+           background:
+            rgba(255, 255, 255, 0.86);
         }
 
     
@@ -207,9 +208,7 @@
             border-radius: 30px;
             background: var(--card-surface);
             border: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow:
-                0 18px 45px rgba(122, 88, 28, 0.12),
-                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+         
         }
 
         .panel-title {
@@ -392,9 +391,7 @@
             background:
                 radial-gradient(circle at top left, rgba(255, 240, 164, 0.95), transparent 22%),
                 linear-gradient(135deg, #ffd60a 0%, #f8cc0d 45%, #e3b400 100%);
-            box-shadow:
-                0 22px 46px rgba(142, 103, 18, 0.22),
-                inset 0 1px 0 rgba(255, 255, 255, 0.4);
+          
             animation: float-card 4.8s ease-in-out infinite;
         }
 
@@ -428,7 +425,7 @@
             height: 28px;
             border-radius: 8px;
             background:
-                linear-gradient(180deg, rgba(255, 245, 213, 0.9) 0%, rgba(232, 200, 116, 0.94) 100%);
+              rgba(255, 245, 213, 0.9);
             box-shadow:
                 inset 0 0 0 1px rgba(93, 67, 15, 0.16),
                 0 6px 10px rgba(124, 88, 16, 0.22);

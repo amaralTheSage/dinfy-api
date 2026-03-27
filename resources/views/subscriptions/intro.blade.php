@@ -37,7 +37,7 @@
             font-family: "Plus Jakarta Sans", sans-serif;
             color: var(--text);
             background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.4));
+                rgba(255, 255, 255, 0.86)
         }
 
         .phone {
@@ -130,167 +130,10 @@
             height: 456px;
             margin: 6px -2px 0;
             border-radius: 26px;
-            background:
-                radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.72), transparent 22%),
-                linear-gradient(180deg, #f7f7f8 0%, #eef1f4 100%);
+
             overflow: hidden;
         }
 
-        .shadow-blob,
-        .hand-top,
-        .hand-bottom,
-        .arm-top,
-        .arm-bottom,
-        .terminal,
-        .wallet-card {
-            position: absolute;
-        }
-
-        .shadow-blob {
-            width: 220px;
-            height: 220px;
-            border-radius: 999px;
-            filter: blur(10px);
-            opacity: 0.18;
-            background: rgba(124, 132, 145, 0.8);
-        }
-
-        .shadow-blob.one {
-            top: 44px;
-            right: -56px;
-        }
-
-        .shadow-blob.two {
-            left: -74px;
-            bottom: 32px;
-        }
-
-        .arm-top,
-        .arm-bottom,
-        .hand-top,
-        .hand-bottom {
-            background: linear-gradient(180deg, #f1dbcf 0%, #e6c3b4 100%);
-            box-shadow: 0 18px 26px rgba(87, 66, 56, 0.08);
-        }
-
-        .arm-top {
-            top: -8px;
-            left: 50%;
-            width: 92px;
-            height: 188px;
-            border-radius: 60px 60px 36px 36px;
-            transform: translateX(-28%) rotate(8deg);
-        }
-
-        .hand-top {
-            top: 116px;
-            left: 50%;
-            width: 88px;
-            height: 138px;
-            border-radius: 32px;
-            transform: translateX(-24%) rotate(8deg);
-        }
-
-        .arm-bottom {
-            bottom: -10px;
-            left: 50%;
-            width: 82px;
-            height: 184px;
-            border-radius: 48px 48px 20px 20px;
-            transform: translateX(-50%) rotate(-18deg);
-        }
-
-        .hand-bottom {
-            bottom: 92px;
-            left: 50%;
-            width: 92px;
-            height: 106px;
-            border-radius: 32px;
-            transform: translateX(-6%) rotate(-24deg);
-        }
-
-        .terminal {
-            top: 148px;
-            left: 50%;
-            width: 84px;
-            height: 150px;
-            padding: 12px 10px;
-            border-radius: 18px;
-            background: linear-gradient(180deg, var(--terminal-top) 0%, var(--terminal) 100%);
-            transform: translateX(-12%) rotate(16deg);
-            box-shadow: 0 20px 30px rgba(20, 25, 31, 0.24);
-        }
-
-        .terminal-screen {
-            height: 26px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #162f1f 0%, #214d33 100%);
-        }
-
-        .terminal-keys {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-
-        .terminal-keys span {
-            height: 14px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .terminal-keys span.green {
-            background: #20ad63;
-        }
-
-        .terminal-keys span.red {
-            background: #eb5757;
-        }
-
-        .terminal-keys span.orange {
-            background: #f2a541;
-        }
-
-        .wallet-card {
-            bottom: 122px;
-            left: 50%;
-            width: 128px;
-            height: 82px;
-            padding: 16px;
-            border-radius: 18px;
-            background: linear-gradient(180deg, #f4eae8 0%, var(--card) 100%);
-            transform: translateX(-4%) rotate(-21deg);
-            box-shadow: 0 20px 30px rgba(86, 72, 75, 0.16);
-        }
-
-        .wallet-card::before,
-        .wallet-card::after {
-            content: "";
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            width: 16px;
-            height: 16px;
-            border-radius: 999px;
-            opacity: 0.95;
-        }
-
-        .wallet-card::before {
-            right: 26px;
-            background: #f4b400;
-        }
-
-        .wallet-card::after {
-            background: var(--accent);
-        }
-
-        .wallet-chip {
-            width: 18px;
-            height: 14px;
-            border-radius: 4px;
-            background: rgba(147, 129, 129, 0.28);
-        }
 
         .content {
             padding: 18px 8px 0;
