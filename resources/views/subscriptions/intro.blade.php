@@ -37,16 +37,14 @@
             font-family: "Plus Jakarta Sans", sans-serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(255, 255, 255, 0.65), transparent 26%),
-                linear-gradient(180deg, #e6eef4 0%, var(--page-bg) 100%);
+                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.4));
         }
 
         .phone {
             width: min(420px, 100%);
             padding: 10px;
             border-radius: 36px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.4));
-            box-shadow: 0 28px 60px var(--shadow);
+
         }
 
         .screen {
@@ -55,7 +53,6 @@
             min-height: 780px;
             padding: 18px 18px 20px;
             border-radius: 28px;
-            background: linear-gradient(180deg, #f7f8fa 0%, var(--screen) 100%);
         }
 
         .status-bar {
@@ -407,7 +404,6 @@
                 <h1>Pague de forma segura</h1>
                 <p class="copy">
                     Utilizamos o sistema de pagamento do Mercado Pago para garantir segurança aos nossos usuários.
-                    {{ strtolower($plan['name']) }}.
                 </p>
                 <div class="plan-pill">
                     <span>{{ $plan['name'] }}</span>
@@ -422,7 +418,6 @@
                 @endif
             </section>
 
-            <div class="home-indicator" aria-hidden="true"></div>
         </section>
     </main>
 </body>

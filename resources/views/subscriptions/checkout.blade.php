@@ -10,12 +10,10 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
         :root {
-            --page-top: #0f3d91;
-            --page-bottom: #7fb7ff;
             --phone-surface: #f5deb0;
             --phone-surface-2: #f8e8bf;
-            --card-surface: rgba(255, 247, 228, 0.96);
-            --field-surface: #f9edd0;
+            --card-surface: rgba(234, 237, 238, 0.96);
+            --field-surface: rgba(255, 255, 255, 0.96);
             --field-shadow: rgba(181, 137, 45, 0.08);
             --text: #17120d;
             --muted: rgba(23, 18, 13, 0.58);
@@ -40,13 +38,10 @@
 
         body {
             margin: 0;
-            font-family: "Plus Jakarta Sans", "Trebuchet MS", sans-serif;
+            font-family: "Plus Jakarta Sans", sans-serif;
             color: var(--text);
             background:
-                radial-gradient(circle at top left, rgba(255, 255, 255, 0.16), transparent 30%),
-                radial-gradient(circle at 85% 15%, rgba(169, 220, 255, 0.3), transparent 18%),
-                radial-gradient(circle at 20% 90%, rgba(255, 222, 160, 0.2), transparent 24%),
-                linear-gradient(180deg, var(--page-top) 0%, #2964c2 42%, var(--page-bottom) 100%);
+                linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.4));
         }
 
         .logo {
@@ -90,35 +85,20 @@
 
         .phone {
             width: min(430px, 100%);
-            border-radius: 42px;
-            padding: 18px;
-            background: linear-gradient(180deg, rgba(255, 248, 230, 0.78) 0%, rgba(243, 220, 171, 0.92) 100%);
-            box-shadow:
-                0 32px 90px rgba(4, 20, 57, 0.34),
-                inset 0 1px 0 rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(16px);
+
+            padding-inline: 18px;
+          
+
         }
 
         .phone-inner {
             position: relative;
             overflow: hidden;
-            border-radius: 32px;
-            padding: 18px 16px 20px;
-            background:
-                radial-gradient(circle at top right, rgba(255, 247, 219, 0.75), transparent 34%),
-                linear-gradient(180deg, var(--phone-surface-2) 0%, var(--phone-surface) 100%);
+
+       
         }
 
-        .phone-inner::before {
-            content: "";
-            position: absolute;
-            inset: 10px 10px auto;
-            height: 110px;
-            border-radius: 24px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent);
-            pointer-events: none;
-        }
-
+    
         .topbar {
             position: relative;
             display: grid;
@@ -271,7 +251,9 @@
         .field select,
         .mp-box {
             width: 100%;
+            height: 52px;
             min-height: 52px;
+            max-height: 52px;
             border: 1px solid transparent;
             border-radius: 18px;
             padding: 14px 16px;
@@ -283,6 +265,7 @@
             color: var(--text);
             font: inherit;
             transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
         }
 
         .field select {
@@ -311,6 +294,12 @@
 
         .field input[readonly] {
             color: rgba(23, 18, 13, 0.62);
+        }
+
+        .mp-box iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
         }
 
         .aux-hidden {
@@ -632,20 +621,20 @@
                 </section>
 
                 <section class="payment-panel">
-                    <h2 class="panel-title">Card Details</h2>
+                    <h2 class="panel-title">Dados do Cartão</h2>
 
                     @if ($errorMessage)
                         <div class="error-panel">
                             <div class="status error is-visible">{{ $errorMessage }}</div>
-                            <a class="button button-secondary" href="{{ $returnUrl }}">Back to app</a>
+                            <a class="button button-secondary" href="{{ $returnUrl }}">Voltar ao app</a>
                         </div>
                     @else
                         <form id="form-checkout">
                             <div class="field-grid">
                                 <div class="field full">
-                                    <label for="form-checkout__cardholderName">Card Holder Name</label>
+                                    <label for="form-checkout__cardholderName">Nome do Titular</label>
                                     <input type="text" id="form-checkout__cardholderName" autocomplete="cc-name"
-                                        placeholder="Noah Ethan Jeremy" />
+                                        placeholder="Nome Completo" />
                                 </div>
 
                                 <div class="field-row">
@@ -655,31 +644,31 @@
                                     </div>
 
                                     <div class="mp-field">
-                                        <label for="form-checkout__expirationDate">Expire Date</label>
+                                        <label for="form-checkout__expirationDate">Validade</label>
                                         <div id="form-checkout__expirationDate" class="mp-box"></div>
                                     </div>
                                 </div>
 
                                 <div class="mp-field full">
-                                    <label for="form-checkout__cardNumber">Card Number</label>
+                                    <label for="form-checkout__cardNumber">Número do Cartão</label>
                                     <div id="form-checkout__cardNumber" class="mp-box"></div>
                                 </div>
 
                                 <div class="field-row">
                                     <div class="field">
-                                        <label for="form-checkout__identificationType">Document Type</label>
+                                        <label for="form-checkout__identificationType">Tipo de Documento</label>
                                         <select id="form-checkout__identificationType"></select>
                                     </div>
 
                                     <div class="field">
-                                        <label for="form-checkout__identificationNumber">Document Number</label>
+                                        <label for="form-checkout__identificationNumber">Número do Documento</label>
                                         <input type="text" id="form-checkout__identificationNumber"
                                             inputmode="numeric" placeholder="12345678900" />
                                     </div>
                                 </div>
 
                                 <div class="field full">
-                                    <label for="form-checkout__cardholderEmail">Subscription Email</label>
+                                    <label for="form-checkout__cardholderEmail">E-mail da Assinatura</label>
                                     <input type="email" id="form-checkout__cardholderEmail"
                                         value="{{ $user->email }}" readonly />
                                 </div>
@@ -694,9 +683,9 @@
 
                             <div class="actions">
                                 <button type="submit" id="form-checkout__submit" class="button button-primary">
-                                    Add &amp; Pay
+                                    Adicionar e Pagar
                                 </button>
-                                <a class="button button-secondary" href="{{ $returnUrl }}">Back to app</a>
+                                <a class="button button-secondary" href="{{ $returnUrl }}">Voltar ao app</a>
                             </div>
 
 
@@ -715,7 +704,7 @@
                     <div class="card-number">1234 1234 1234 1234</div>
 
                     <div class="card-preview-bottom">
-                        <div class="card-name" id="card-preview-name">Your Name</div>
+                        <div class="card-name" id="card-preview-name">Seu Nome</div>
                         <div class="card-expiry">12/28</div>
                     </div>
                 </section>
@@ -723,7 +712,7 @@
                 <section id="result-feedback" class="result-feedback" aria-live="polite">
                     <div id="result-icon" class="result-icon">i</div>
                     <div>
-                        <p id="result-title" class="result-title">Payment status</p>
+                        <p id="result-title" class="result-title">Status do pagamento</p>
                         <p id="result-message" class="result-message"></p>
                     </div>
                 </section>
@@ -770,12 +759,12 @@
 
                 const setSubmitting = (value) => {
                     submitButton.disabled = value;
-                    submitButton.textContent = value ? 'Processing...' : 'Add & Pay';
+                    submitButton.textContent = value ? 'Processando...' : 'Adicionar e Pagar';
                 };
 
                 const syncPreviewName = () => {
                     const value = nameInput.value.trim();
-                    previewName.textContent = value !== '' ? value.toUpperCase() : 'YOUR NAME';
+                    previewName.textContent = value !== '' ? value.toUpperCase() : 'SEU NOME';
                 };
 
                 const firstErrorFromPayload = (payload) => {
@@ -820,7 +809,7 @@
                         },
                         cardholderName: {
                             id: 'form-checkout__cardholderName',
-                            placeholder: 'Noah Ethan Jeremy',
+                            placeholder: 'Nome Completo',
                         },
                         issuer: {
                             id: 'form-checkout__issuer',
@@ -837,16 +826,16 @@
                         },
                         cardholderEmail: {
                             id: 'form-checkout__cardholderEmail',
-                            placeholder: 'you@email.com',
+                            placeholder: 'voce@email.com',
                         },
                     },
                     callbacks: {
                         onFormMounted: (error) => {
                             if (error) {
-                                showStatus('We could not load the Mercado Pago card form.');
+                                showStatus('Não foi possível carregar o formulário de cartão do Mercado Pago.');
                                 showResult(
-                                    'Payment unavailable',
-                                    'The secure card fields did not load. Please refresh and try again.',
+                                    'Pagamento indisponível',
+                                    'Os campos seguros do cartão não carregaram. Atualize a página e tente novamente.',
                                     'error',
                                 );
                             }
@@ -861,10 +850,10 @@
                                 const { token } = cardForm.getCardFormData();
 
                                 if (!token) {
-                                    showStatus('We could not generate the secure card token.');
+                                    showStatus('Não foi possível gerar o token seguro do cartão.');
                                     showResult(
-                                        'Payment denied',
-                                        'Review your card details and try again.',
+                                        'Pagamento negado',
+                                        'Verifique os dados do cartão e tente novamente.',
                                         'error',
                                     );
                                     setSubmitting(false);
@@ -886,10 +875,10 @@
 
                                 if (!response.ok) {
                                     const message = firstErrorFromPayload(payload) ??
-                                        'The payment could not be completed with this card.';
+                                        'O pagamento não pôde ser concluído com este cartão.';
 
                                     showStatus(message);
-                                    showResult('Payment denied', message, 'error');
+                                    showResult('Pagamento negado', message, 'error');
                                     setSubmitting(false);
                                     return;
                                 }
@@ -898,10 +887,10 @@
                                     ? payload.redirect_url.trim()
                                     : fallbackReturnUrl;
 
-                                showStatus('Payment accepted. Returning to the app...', 'success');
+                                showStatus('Pagamento aprovado. Retornando ao app...', 'success');
                                 showResult(
-                                    'Payment accepted',
-                                    'Your subscription is active. Redirecting back to Dinfy...',
+                                    'Pagamento aprovado',
+                                    'Sua assinatura está ativa. Redirecionando para o Dinfy...',
                                     'success',
                                 );
 
@@ -909,10 +898,10 @@
                                     window.location.href = redirectUrl;
                                 }, 1400);
                             } catch (_) {
-                                showStatus('We could not send your payment details. Please try again.');
+                                showStatus('Não foi possível enviar os dados do pagamento. Tente novamente.');
                                 showResult(
-                                    'Connection issue',
-                                    'Your payment was not confirmed because the request failed.',
+                                    'Problema de conexão',
+                                    'Seu pagamento não foi confirmado porque a requisição falhou.',
                                     'error',
                                 );
                                 setSubmitting(false);
