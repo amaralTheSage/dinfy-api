@@ -147,6 +147,7 @@ it('completes a hosted checkout session with a card token', function () {
 
     $response = $this->postJson("/api/subscriptions/checkout/session/{$sessionId}/complete", [
         'card_token_id' => 'card_token_session_123',
+        'device_session_id' => 'device-session-hosted-123',
     ]);
 
     $response
@@ -161,6 +162,7 @@ it('completes a hosted checkout session with a card token', function () {
             && $request['preapproval_plan_id'] === 'preplan_monthly_123'
             && $request['payer_email'] === 'checkout@example.com'
             && $request['card_token_id'] === 'card_token_session_123'
+            && $request->hasHeader('X-meli-session-id', 'device-session-hosted-123')
             && $request['status'] === 'authorized';
     });
 });
@@ -194,6 +196,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
     $response = $this->postJson('/api/subscriptions/checkout', [
         'plan' => 'monthly',
         'card_token_id' => 'card_token_123',
+        'device_session_id' => 'device-session-direct-123',
     ]);
 
     $response
@@ -208,6 +211,7 @@ it('creates a monthly subscription checkout and stores the local summary', funct
             && $request['payer_email'] === 'gabriel@example.com'
             && $request['preapproval_plan_id'] === 'preplan_monthly_123'
             && $request['card_token_id'] === 'card_token_123'
+            && $request->hasHeader('X-meli-session-id', 'device-session-direct-123')
             && $request['status'] === 'authorized'
             && $request['back_url'] === 'https://dinfy.app/assinatura'
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'

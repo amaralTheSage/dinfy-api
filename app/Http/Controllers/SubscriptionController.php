@@ -7,6 +7,7 @@ use App\Services\Subscriptions\SubscriptionManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SubscriptionController extends Controller
 {
@@ -35,23 +36,40 @@ class SubscriptionController extends Controller
 
     public function checkout(Request $request)
     {
-        Log::info('Intenção de assinatura criada');
-        $validated = $request->validate([
-            'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
-            'payer_email' => ['nullable', 'email:rfc'],
-            'card_token_id' => ['nullable', 'string'],
-        ]);
+        Log::info('1. Entrou em SubscriptionController@checkout');
 
-        Log::info('Intenção de assinatura validada. Plano ' + $validated['plan']);
+        try {
+            $validated = $request->validate([
+                'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
+                'payer_email' => ['nullable', 'email:rfc'],
+                'card_token_id' => ['nullable', 'string'],
+                'device_session_id' => ['nullable', 'string'],
+            ]);
+        } catch (ValidationException $e) {
+            Log::warning('2. Falha na validacao em SubscriptionController@checkout', [
+                'errors' => $e->errors(),
+            ]);
+
+            throw $e;
+        }
+
+        Log::info('2. Validacao concluida em SubscriptionController@checkout', [
+            'plan' => $validated['plan'],
+        ]);
 
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
             (string) $validated['plan'],
             isset($validated['payer_email']) ? (string) $validated['payer_email'] : null,
             isset($validated['card_token_id']) ? (string) $validated['card_token_id'] : null,
+            isset($validated['device_session_id']) ? (string) $validated['device_session_id'] : null,
         );
 
-        Log::info('Assinatura criada para usuário ' + $request->user()->name + ' para o plano ' + $validated['plan']);
+        Log::info('9. SubscriptionController@checkout finalizado com sucesso', [
+            'subscription_id' => $subscription->id,
+            'plan' => $validated['plan'],
+            'status' => $subscription->status,
+        ]);
 
         return response()->json([
             'subscription' => $this->serializeSubscription($subscription),
@@ -60,7 +78,14 @@ class SubscriptionController extends Controller
 
     public function cancel(Request $request)
     {
+        Log::info('1. Entrou em SubscriptionController@cancel');
+
         $subscription = $this->subscriptions->cancelCurrent($request->user());
+
+        Log::info('9. SubscriptionController@cancel finalizado com sucesso', [
+            'subscription_id' => $subscription->id,
+            'status' => $subscription->status,
+        ]);
 
         return response()->json([
             'subscription' => $this->serializeSubscription($subscription),

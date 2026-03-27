@@ -231,7 +231,7 @@
 </head>
 
 @php
-    $periodLabel = $plan['frequency'] === 12 ? 'ano' : 'mes';
+    $periodLabel = $plan['frequency'] === 12 ? 'ano' : 'mês';
 @endphp
 
 <body>

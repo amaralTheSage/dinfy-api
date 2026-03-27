@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dinfy </title>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script src="https://www.mercadopago.com/v2/security.js" view="checkout"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -785,6 +786,16 @@
                 nameInput.addEventListener('input', syncPreviewName);
                 syncPreviewName();
 
+                const resolveDeviceSessionId = () => {
+                    if (typeof window.MP_DEVICE_SESSION_ID !== 'string') {
+                        return null;
+                    }
+
+                    const value = window.MP_DEVICE_SESSION_ID.trim();
+
+                    return value !== '' ? value : null;
+                };
+
                 const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
 
                 const cardForm = mp.cardForm({
@@ -865,6 +876,7 @@
                                     },
                                     body: JSON.stringify({
                                         card_token_id: token,
+                                        device_session_id: resolveDeviceSessionId(),
                                     }),
                                 });
 

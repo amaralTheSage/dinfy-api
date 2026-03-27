@@ -6,6 +6,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -21,6 +22,11 @@ class MercadoPagoSubscriptionGateway
         string $payerEmail,
     ): array
     {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPendingPreapproval', [
+            'plan' => $plan['code'] ?? null,
+            'external_reference' => $externalReference,
+        ]);
+
         $payload = [
             'reason' => $plan['reason'],
             'external_reference' => $externalReference,
@@ -58,10 +64,21 @@ class MercadoPagoSubscriptionGateway
         string $externalReference,
         string $payerEmail,
         string $cardTokenId,
+        ?string $deviceSessionId = null,
     ): array
     {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createAuthorizedPreapprovalWithPlan', [
+            'plan' => $plan['code'] ?? null,
+            'external_reference' => $externalReference,
+            'has_device_session_id' => trim((string) $deviceSessionId) !== '',
+        ]);
+
         $preapprovalPlanId = trim((string) ($plan['preapproval_plan_id'] ?? ''));
         if ($preapprovalPlanId === '') {
+            Log::warning('5. preapproval_plan_id ausente em MercadoPagoSubscriptionGateway@createAuthorizedPreapprovalWithPlan', [
+                'plan' => $plan['code'] ?? null,
+            ]);
+
             throw new RuntimeException('Mercado Pago preapproval plan ID is not configured for this subscription plan.');
         }
 
@@ -80,10 +97,17 @@ class MercadoPagoSubscriptionGateway
             $payload['notification_url'] = $notificationUrl;
         }
 
+        $headers = [
+            'X-Idempotency-Key' => (string) Str::uuid(),
+        ];
+
+        $deviceSessionId = trim((string) $deviceSessionId);
+        if ($deviceSessionId !== '') {
+            $headers['X-meli-session-id'] = $deviceSessionId;
+        }
+
         return $this->request()
-            ->withHeaders([
-                'X-Idempotency-Key' => (string) Str::uuid(),
-            ])
+            ->withHeaders($headers)
             ->post('/preapproval', $payload)
             ->throw()
             ->json();
@@ -94,6 +118,10 @@ class MercadoPagoSubscriptionGateway
      */
     public function fetchPreapproval(string $preapprovalId): array
     {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchPreapproval', [
+            'preapproval_id' => $preapprovalId,
+        ]);
+
         $searchResponse = $this->request()
             ->get('/preapproval/search', [
                 'id' => $preapprovalId,
@@ -123,6 +151,10 @@ class MercadoPagoSubscriptionGateway
      */
     public function cancelPreapproval(string $preapprovalId): array
     {
+        Log::info('6. Entrou em MercadoPagoSubscriptionGateway@cancelPreapproval', [
+            'preapproval_id' => $preapprovalId,
+        ]);
+
         return $this->request()
             ->put('/preapproval/' . urlencode($preapprovalId), [
                 'status' => 'canceled',
@@ -136,6 +168,10 @@ class MercadoPagoSubscriptionGateway
      */
     public function cancelPayment(string $paymentId): array
     {
+        Log::info('6. Entrou em MercadoPagoSubscriptionGateway@cancelPayment', [
+            'payment_id' => $paymentId,
+        ]);
+
         return $this->request()
             ->put('/v1/payments/' . urlencode($paymentId), [
                 'status' => 'canceled',
@@ -149,6 +185,10 @@ class MercadoPagoSubscriptionGateway
      */
     public function fetchPayment(string $paymentId): array
     {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchPayment', [
+            'payment_id' => $paymentId,
+        ]);
+
         return $this->request()
             ->get('/v1/payments/' . urlencode($paymentId))
             ->throw()
@@ -160,6 +200,10 @@ class MercadoPagoSubscriptionGateway
      */
     public function fetchAuthorizedPayment(string $authorizedPaymentId): array
     {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchAuthorizedPayment', [
+            'authorized_payment_id' => $authorizedPaymentId,
+        ]);
+
         return $this->request()
             ->get('/authorized_payments/' . urlencode($authorizedPaymentId))
             ->throw()

@@ -5,6 +5,7 @@ namespace App\Services\Subscriptions;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class SubscriptionCheckoutSessionStore
@@ -16,6 +17,11 @@ class SubscriptionCheckoutSessionStore
      */
     public function create(User $user, string $planCode): array
     {
+        Log::info('3. Entrou em SubscriptionCheckoutSessionStore@create', [
+            'user_id' => $user->id,
+            'plan' => $planCode,
+        ]);
+
         $ttlMinutes = max((int) config('subscriptions.payment_session_ttl_minutes', 30), 1);
         $expiresAt = now()->addMinutes($ttlMinutes);
         $sessionId = (string) Str::uuid();
@@ -39,8 +45,16 @@ class SubscriptionCheckoutSessionStore
      */
     public function find(string $sessionId): ?array
     {
+        Log::info('3. Entrou em SubscriptionCheckoutSessionStore@find', [
+            'session_id' => $sessionId,
+        ]);
+
         $payload = Cache::get($this->cacheKey($sessionId));
         if (!is_array($payload)) {
+            Log::warning('3. Sessao nao encontrada em SubscriptionCheckoutSessionStore@find', [
+                'session_id' => $sessionId,
+            ]);
+
             return null;
         }
 
@@ -53,6 +67,10 @@ class SubscriptionCheckoutSessionStore
 
     public function forget(string $sessionId): void
     {
+        Log::info('8. Removendo sessao em SubscriptionCheckoutSessionStore@forget', [
+            'session_id' => $sessionId,
+        ]);
+
         Cache::forget($this->cacheKey($sessionId));
     }
 
