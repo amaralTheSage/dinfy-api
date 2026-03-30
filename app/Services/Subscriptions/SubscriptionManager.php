@@ -47,6 +47,7 @@ class SubscriptionManager
 
         if (
             $sync
+            && $subscription
             && in_array($subscription->status, self::OPEN_STATUSES, true)
         ) {
             if ($subscription->mercado_pago_preapproval_id) {

@@ -43,6 +43,22 @@ it('lists the available subscription plans', function () {
     expect((float) $response->json('plans.1.monthly_equivalent'))->toBe((float) $yearlyPlan['monthly_equivalent']);
 });
 
+it('returns a null current subscription when the user has no subscription yet', function () {
+    Http::fake();
+
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/subscriptions/current?sync=1');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('subscription', null);
+
+    Http::assertNothingSent();
+});
+
 it('creates a hosted checkout session for an authorized subscription plan', function () {
     Http::fake();
 
