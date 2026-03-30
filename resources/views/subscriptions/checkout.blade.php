@@ -695,16 +695,16 @@
                 <section class="card-preview" aria-hidden="true">
                     <div class="card-preview-top">
                         <span class="wave-icon">)))</span>
-                        <span class="brand">VISA</span>
+                        <span class="brand" id="card-preview-brand">CARTAO</span>
                     </div>
 
                     <div class="chip"></div>
 
-                    <div class="card-number">1234 1234 1234 1234</div>
+                    <div class="card-number" id="card-preview-number">**** **** **** ****</div>
 
                     <div class="card-preview-bottom">
                         <div class="card-name" id="card-preview-name">Seu Nome</div>
-                        <div class="card-expiry">12/28</div>
+                        <div class="card-expiry" id="card-preview-expiry">MM/AA</div>
                     </div>
                 </section>
 
@@ -727,13 +727,34 @@
                 const fallbackReturnUrl = @json($returnUrl);
 
                 const statusBox = document.getElementById('status-box');
+                const checkoutForm = document.getElementById('form-checkout');
                 const submitButton = document.getElementById('form-checkout__submit');
                 const nameInput = document.getElementById('form-checkout__cardholderName');
+                const previewBrand = document.getElementById('card-preview-brand');
+                const previewNumber = document.getElementById('card-preview-number');
                 const previewName = document.getElementById('card-preview-name');
+                const previewExpiry = document.getElementById('card-preview-expiry');
                 const resultFeedback = document.getElementById('result-feedback');
                 const resultIcon = document.getElementById('result-icon');
                 const resultTitle = document.getElementById('result-title');
                 const resultMessage = document.getElementById('result-message');
+                const previewNumberPlaceholder = '**** **** **** ****';
+                const previewExpiryPlaceholder = 'MM/AA';
+                const previewBrandPlaceholder = 'CARTAO';
+                const paymentMethodLabels = {
+                    visa: 'VISA',
+                    mastercard: 'MASTERCARD',
+                    amex: 'AMEX',
+                    elo: 'ELO',
+                    hipercard: 'HIPERCARD',
+                    cabal: 'CABAL',
+                    diners: 'DINERS',
+                    discover: 'DISCOVER',
+                    jcb: 'JCB',
+                    naranja: 'NARANJA',
+                    argencard: 'ARGENCARD',
+                };
+                let cardForm = null;
 
                 const showStatus = (message, kind = 'error') => {
                     statusBox.textContent = message;
@@ -761,9 +782,140 @@
                     submitButton.textContent = value ? 'Processando...' : 'Adicionar e Pagar';
                 };
 
+                const onlyDigits = (value) => String(value ?? '').replace(/\D+/g, '');
+
+                const cardLengthFor = (paymentMethodId) =>
+                    String(paymentMethodId ?? '').trim().toLowerCase() === 'amex' ? 15 : 16;
+
+                const groupCardPreview = (value, paymentMethodId) => {
+                    const compactValue = String(value ?? '').replace(/\s+/g, '');
+
+                    if (cardLengthFor(paymentMethodId) === 15 && compactValue.length >= 15) {
+                        return [
+                            compactValue.slice(0, 4),
+                            compactValue.slice(4, 10),
+                            compactValue.slice(10, 15),
+                        ].filter(Boolean).join(' ');
+                    }
+
+                    return compactValue.match(/.{1,4}/g)?.join(' ') ?? compactValue;
+                };
+
+                const formatMaskedNumber = (digits, paymentMethodId) => {
+                    const sanitized = onlyDigits(digits);
+                    if (sanitized === '') {
+                        return previewNumberPlaceholder;
+                    }
+
+                    const totalLength = cardLengthFor(paymentMethodId);
+                    const padded = sanitized.slice(0, totalLength).padEnd(totalLength, '*');
+                    return groupCardPreview(padded, paymentMethodId);
+                };
+
+                const formatNumberFromParts = (bin, lastFour, paymentMethodId) => {
+                    const sanitizedBin = onlyDigits(bin).slice(0, 6);
+                    const sanitizedLastFour = onlyDigits(lastFour).slice(-4);
+                    const totalLength = cardLengthFor(paymentMethodId);
+
+                    if (sanitizedBin === '' && sanitizedLastFour === '') {
+                        return previewNumberPlaceholder;
+                    }
+
+                    if (sanitizedBin !== '' && sanitizedLastFour !== '') {
+                        const middleLength = Math.max(totalLength - sanitizedBin.length - sanitizedLastFour.length, 0);
+                        return groupCardPreview(
+                            `${sanitizedBin}${'*'.repeat(middleLength)}${sanitizedLastFour}`,
+                            paymentMethodId,
+                        );
+                    }
+
+                    if (sanitizedLastFour !== '') {
+                        return groupCardPreview(
+                            `${'*'.repeat(Math.max(totalLength - sanitizedLastFour.length, 0))}${sanitizedLastFour}`,
+                            paymentMethodId,
+                        );
+                    }
+
+                    return groupCardPreview(
+                        `${sanitizedBin}${'*'.repeat(Math.max(totalLength - sanitizedBin.length, 0))}`,
+                        paymentMethodId,
+                    );
+                };
+
+                const formatExpiry = (data) => {
+                    const rawExpirationDate = String(
+                        data.expirationDate ?? data.expiration_date ?? '',
+                    ).trim();
+
+                    if (/^\d{2}\/\d{2,4}$/.test(rawExpirationDate)) {
+                        const [month, year] = rawExpirationDate.split('/');
+                        return `${month.padStart(2, '0')}/${year.slice(-2).padStart(2, '0')}`;
+                    }
+
+                    const month = onlyDigits(
+                        data.expirationMonth ?? data.expiration_month,
+                    ).slice(0, 2);
+                    const year = onlyDigits(
+                        data.expirationYear ?? data.expiration_year,
+                    ).slice(-2);
+
+                    if (month === '' && year === '') {
+                        return previewExpiryPlaceholder;
+                    }
+
+                    return `${month.padEnd(2, '*')}/${year.padEnd(2, '*')}`;
+                };
+
+                const resolveBrandLabel = (data) => {
+                    const rawBrand = String(
+                        data.paymentMethodId ??
+                        data.payment_method_id ??
+                        data.brand ??
+                        data.paymentMethod ??
+                        '',
+                    ).trim().toLowerCase();
+
+                    if (rawBrand === '') {
+                        return previewBrandPlaceholder;
+                    }
+
+                    return paymentMethodLabels[rawBrand] ?? rawBrand.toUpperCase();
+                };
+
                 const syncPreviewName = () => {
                     const value = nameInput.value.trim();
                     previewName.textContent = value !== '' ? value.toUpperCase() : 'SEU NOME';
+                };
+
+                const readCardFormData = () => {
+                    if (!cardForm || typeof cardForm.getCardFormData !== 'function') {
+                        return {};
+                    }
+
+                    try {
+                        return cardForm.getCardFormData() ?? {};
+                    } catch (_) {
+                        return {};
+                    }
+                };
+
+                const syncCardPreview = () => {
+                    syncPreviewName();
+
+                    const formData = readCardFormData();
+                    const paymentMethodId =
+                        formData.paymentMethodId ?? formData.payment_method_id ?? '';
+                    const cardNumber =
+                        formData.cardNumber ?? formData.card_number ?? '';
+                    const lastFour =
+                        formData.lastFourDigits ?? formData.last_four_digits ?? '';
+                    const bin = formData.bin ?? '';
+
+                    previewBrand.textContent = resolveBrandLabel(formData);
+                    previewNumber.textContent = onlyDigits(cardNumber) !== ''
+                        ? formatMaskedNumber(cardNumber, paymentMethodId)
+                        : formatNumberFromParts(bin, lastFour, paymentMethodId);
+                    previewExpiry.textContent = formatExpiry(formData);
                 };
 
                 const firstErrorFromPayload = (payload) => {
@@ -784,8 +936,10 @@
                     return null;
                 };
 
-                nameInput.addEventListener('input', syncPreviewName);
-                syncPreviewName();
+                nameInput.addEventListener('input', syncCardPreview);
+                checkoutForm.addEventListener('input', syncCardPreview);
+                checkoutForm.addEventListener('change', syncCardPreview);
+                syncCardPreview();
 
                 const resolveDeviceSessionId = () => {
                     if (typeof window.MP_DEVICE_SESSION_ID !== 'string') {
@@ -799,7 +953,7 @@
 
                 const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
 
-                const cardForm = mp.cardForm({
+                cardForm = mp.cardForm({
                     amount: @json((string) $plan['amount']),
                     iframe: true,
                     form: {
@@ -840,6 +994,8 @@
                     },
                     callbacks: {
                         onFormMounted: (error) => {
+                            syncCardPreview();
+
                             if (error) {
                                 showStatus('Não foi possível carregar o formulário de cartão do Mercado Pago.');
                                 showResult(
@@ -848,6 +1004,9 @@
                                     'error',
                                 );
                             }
+                        },
+                        onBinChange: () => {
+                            syncCardPreview();
                         },
                         onSubmit: async (event) => {
                             event.preventDefault();
@@ -935,6 +1094,11 @@
                             }
                         },
                     },
+                });
+
+                const previewSyncIntervalId = window.setInterval(syncCardPreview, 180);
+                window.addEventListener('beforeunload', () => {
+                    window.clearInterval(previewSyncIntervalId);
                 });
             })();
         </script>
