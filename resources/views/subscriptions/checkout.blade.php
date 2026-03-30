@@ -632,7 +632,7 @@
                                 <div class="field full">
                                     <label for="form-checkout__cardholderName">Nome do Titular</label>
                                     <input type="text" id="form-checkout__cardholderName" autocomplete="cc-name"
-                                        placeholder="Nome Completo" />
+                                        placeholder="Nome Completo" required />
                                 </div>
 
                                 <div class="field-row">
@@ -661,14 +661,15 @@
                                     <div class="field">
                                         <label for="form-checkout__identificationNumber">Número do Documento</label>
                                         <input type="text" id="form-checkout__identificationNumber"
-                                            inputmode="numeric" placeholder="12345678900" />
+                                            inputmode="numeric" placeholder="12345678900" 
+                                            maxlength="14" pattern="[0-9]{11,14}" required />
                                     </div>
                                 </div>
 
                                 <div class="field full">
                                     <label for="form-checkout__cardholderEmail">E-mail da Assinatura</label>
                                     <input type="email" id="form-checkout__cardholderEmail"
-                                        value="{{ $user->email }}" readonly />
+                                        value="{{ $user->email }}" placeholder="seu@email.com" required />
                                 </div>
 
                                 <div class="aux-hidden" aria-hidden="true">
@@ -854,10 +855,14 @@
                             resetStatus();
                             setSubmitting(true);
 
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
                             try {
                                 const { token } = cardForm.getCardFormData();
 
                                 if (!token) {
+                                    clearTimeout(timeoutId);
                                     showStatus('Não foi possível gerar o token seguro do cartão.');
                                     showResult(
                                         'Pagamento negado',
@@ -878,8 +883,10 @@
                                         card_token_id: token,
                                         device_session_id: resolveDeviceSessionId(),
                                     }),
+                                    signal: controller.signal,
                                 });
 
+                                clearTimeout(timeoutId);
                                 const payload = await response.json().catch(() => ({}));
 
                                 if (!response.ok) {
@@ -906,13 +913,24 @@
                                 window.setTimeout(() => {
                                     window.location.href = redirectUrl;
                                 }, 1400);
-                            } catch (_) {
-                                showStatus('Não foi possível enviar os dados do pagamento. Tente novamente.');
-                                showResult(
-                                    'Problema de conexão',
-                                    'Seu pagamento não foi confirmado porque a requisição falhou.',
-                                    'error',
-                                );
+                            } catch (error) {
+                                clearTimeout(timeoutId);
+                                
+                                if (error.name === 'AbortError') {
+                                    showStatus('A requisição expirou. Verifique sua conexão e tente novamente.');
+                                    showResult(
+                                        'Conexão lenta',
+                                        'A requisição levou muito tempo. Verifique sua internet.',
+                                        'error',
+                                    );
+                                } else {
+                                    showStatus('Não foi possível enviar os dados do pagamento. Tente novamente.');
+                                    showResult(
+                                        'Problema de conexão',
+                                        'Seu pagamento não foi confirmado porque a requisição falhou.',
+                                        'error',
+                                    );
+                                }
                                 setSubmitting(false);
                             }
                         },
