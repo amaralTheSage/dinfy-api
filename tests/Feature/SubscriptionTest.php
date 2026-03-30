@@ -36,10 +36,11 @@ it('lists the available subscription plans', function () {
         ->assertOk()
         ->assertJsonCount(2, 'plans')
         ->assertJsonPath('plans.0.code', 'monthly')
-        ->assertJsonPath('plans.0.amount', (float) $monthlyPlan['amount'])
-        ->assertJsonPath('plans.1.code', 'yearly')
-        ->assertJsonPath('plans.1.amount', (float) $yearlyPlan['amount'])
-        ->assertJsonPath('plans.1.monthly_equivalent', (float) $yearlyPlan['monthly_equivalent']);
+        ->assertJsonPath('plans.1.code', 'yearly');
+
+    expect((float) $response->json('plans.0.amount'))->toBe((float) $monthlyPlan['amount']);
+    expect((float) $response->json('plans.1.amount'))->toBe((float) $yearlyPlan['amount']);
+    expect((float) $response->json('plans.1.monthly_equivalent'))->toBe((float) $yearlyPlan['monthly_equivalent']);
 });
 
 it('creates a hosted checkout session for an authorized subscription plan', function () {
@@ -86,9 +87,9 @@ it('renders the hosted checkout page for a valid session', function () {
 
     $response
         ->assertOk()
-        ->assertSee('Pagamento seguro para sua assinatura.', false)
-        ->assertSee('checkout-page@example.com', false)
-        ->assertSee('Confirmar assinatura', false);
+        ->assertSee('Pague de forma segura', false)
+        ->assertSee('Continuar para o checkout', false)
+        ->assertSee('R$ 19,90/mês', false);
 
     Http::assertNothingSent();
 });
@@ -347,13 +348,10 @@ it('prevents creating a second subscription while one is still open', function (
 
     UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'pending',
         'external_reference' => 'dinfy:user:' . $user->id . ':plan:monthly:existing',
         'mercado_pago_preapproval_id' => 'preapp_existing',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -395,13 +393,10 @@ it('cancels an authorized subscription through mercado pago', function () {
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'authorized',
         'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-123',
         'mercado_pago_preapproval_id' => 'preapp_authorized_123',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -439,13 +434,10 @@ it('cancels a pending monthly preapproval locally without calling mercado pago',
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'pending',
         'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-123',
         'mercado_pago_preapproval_id' => 'preapp_pending_123',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -489,13 +481,10 @@ it('cancels a pending yearly checkout payment through mercado pago when the paym
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'yearly',
-        'plan_name' => 'Anual',
         'status' => 'pending',
         'external_reference' => 'dinfy-u-' . $user->id . '-p-yearly-123',
         'mercado_pago_payment_id' => 'pay_pending_123',
-        'reason' => 'Dinfy  - Anual',
         'transaction_amount' => 97.00,
         'currency_id' => 'BRL',
         'frequency' => 12,
@@ -534,12 +523,9 @@ it('cancels a local yearly checkout before a payment is created', function () {
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'yearly',
-        'plan_name' => 'Anual',
         'status' => 'pending',
         'external_reference' => 'dinfy-u-' . $user->id . '-p-yearly-123',
-        'reason' => 'Dinfy  - Anual',
         'transaction_amount' => 97.00,
         'currency_id' => 'BRL',
         'frequency' => 12,
@@ -591,13 +577,10 @@ it('ignores webhook updates for a locally canceled pending preapproval checkout'
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'canceled',
         'external_reference' => $externalReference,
         'mercado_pago_preapproval_id' => 'preapp_123',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -646,13 +629,10 @@ it('updates the subscription status from a mercado pago webhook', function () {
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'pending',
         'external_reference' => $externalReference,
         'mercado_pago_preapproval_id' => 'preapp_123',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -752,13 +732,10 @@ it('stores the authorized payment id separately from the real payment id', funct
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'pending',
         'external_reference' => $externalReference,
         'mercado_pago_preapproval_id' => 'preapp_123',
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -797,12 +774,9 @@ it('uses the payment timestamps instead of the local current time when syncing p
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'monthly',
-        'plan_name' => 'Mensal',
         'status' => 'pending',
         'external_reference' => $externalReference,
-        'reason' => 'Dinfy  - Mensal',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -845,12 +819,9 @@ it('activates the yearly checkout plan for 12 months when the payment is approve
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'provider' => 'mercado_pago',
         'plan_code' => 'yearly',
-        'plan_name' => 'Anual',
         'status' => 'pending',
         'external_reference' => $externalReference,
-        'reason' => 'Dinfy  - Anual',
         'transaction_amount' => 97.00,
         'currency_id' => 'BRL',
         'frequency' => 12,

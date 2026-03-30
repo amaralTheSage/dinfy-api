@@ -9,15 +9,12 @@ class UserSubscription extends Model
 {
     protected $fillable = [
         'user_id',
-        'provider',
         'plan_code',
-        'plan_name',
         'status',
         'external_reference',
         'mercado_pago_preapproval_id',
         'mercado_pago_payment_id',
         'mercado_pago_authorized_payment_id',
-        'reason',
         'transaction_amount',
         'currency_id',
         'frequency',

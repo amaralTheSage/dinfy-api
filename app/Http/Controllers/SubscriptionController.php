@@ -99,11 +99,8 @@ class SubscriptionController extends Controller
     {
         return [
             'id' => $subscription->id,
-            'provider' => $subscription->provider,
             'plan' => $subscription->plan_code,
-            'plan_name' => $subscription->plan_name,
             'status' => $subscription->status,
-            'reason' => $subscription->reason,
             'amount' => (float) $subscription->transaction_amount,
             'currency_id' => $subscription->currency_id,
             'frequency' => $subscription->frequency,

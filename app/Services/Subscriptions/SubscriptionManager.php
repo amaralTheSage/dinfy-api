@@ -47,7 +47,6 @@ class SubscriptionManager
 
         if (
             $sync
-            && $subscription?->provider === 'mercado_pago'
             && in_array($subscription->status, self::OPEN_STATUSES, true)
         ) {
             if ($subscription->mercado_pago_preapproval_id) {
@@ -136,12 +135,9 @@ class SubscriptionManager
         $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
             return UserSubscription::query()->create([
                 'user_id' => $user->id,
-                'provider' => (string) config('subscriptions.provider', 'mercado_pago'),
                 'plan_code' => (string) $plan['code'],
-                'plan_name' => (string) $plan['name'],
                 'status' => 'pending',
                 'external_reference' => $externalReference,
-                'reason' => (string) $plan['reason'],
                 'transaction_amount' => (float) $plan['amount'],
                 'currency_id' => (string) $plan['currency_id'],
                 'frequency' => (int) $plan['frequency'],
@@ -460,13 +456,10 @@ class SubscriptionManager
 
         return UserSubscription::query()->create([
             'user_id' => $user->id,
-            'provider' => (string) config('subscriptions.provider', 'mercado_pago'),
             'plan_code' => (string) $plan['code'],
-            'plan_name' => (string) $plan['name'],
             'status' => (string) Arr::get($payload, 'status', 'pending'),
             'external_reference' => $externalReference,
             'mercado_pago_preapproval_id' => $preapprovalId !== '' ? $preapprovalId : null,
-            'reason' => (string) (Arr::get($payload, 'reason') ?? $plan['reason']),
             'transaction_amount' => (float) (Arr::get($payload, 'auto_recurring.transaction_amount') ?? $plan['amount']),
             'currency_id' => (string) (Arr::get($payload, 'auto_recurring.currency_id') ?? $plan['currency_id']),
             'frequency' => (int) (Arr::get($payload, 'auto_recurring.frequency') ?? $plan['frequency']),
@@ -490,7 +483,6 @@ class SubscriptionManager
             'mercado_pago_preapproval_id' => Arr::get($payload, 'id', $subscription->mercado_pago_preapproval_id),
             'status' => $status,
             'external_reference' => Arr::get($payload, 'external_reference', $subscription->external_reference),
-            'reason' => Arr::get($payload, 'reason', $subscription->reason),
             'checkout_url' => Arr::get($payload, 'init_point', $subscription->checkout_url),
             'sandbox_checkout_url' => Arr::get($payload, 'sandbox_init_point', $subscription->sandbox_checkout_url),
             'transaction_amount' => $this->moneyValue(Arr::get($payload, 'auto_recurring.transaction_amount'), $subscription->transaction_amount),
@@ -626,7 +618,7 @@ class SubscriptionManager
         }
 
         $user->forceFill([
-            'subscription_provider' => $current->provider,
+            'subscription_provider' => 'mercado_pago',
             'subscription_plan' => $current->plan_code,
             'subscription_status' => $current->status,
             'subscription_reference' => $current->mercado_pago_preapproval_id ?: $current->external_reference,
