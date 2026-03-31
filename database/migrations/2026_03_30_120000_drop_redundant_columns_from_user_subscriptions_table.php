@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::table('user_subscriptions', function (Blueprint $table) {
             $table->dropColumn([
-                'provider',
                 'plan_name',
                 'reason',
             ]);
@@ -26,7 +25,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('user_subscriptions', function (Blueprint $table) {
-            $table->string('provider', 40)->default('mercado_pago');
             $table->string('plan_name')->default('');
             $table->string('reason')->nullable();
         });

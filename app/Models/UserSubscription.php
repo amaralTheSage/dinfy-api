@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\SubscriptionInvoice;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserSubscription extends Model
 {
     protected $fillable = [
         'user_id',
+        'provider',
         'plan_code',
         'status',
         'external_reference',
@@ -48,5 +50,10 @@ class UserSubscription extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function invoices(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SubscriptionInvoice::class, 'user_subscription_id');
     }
 }

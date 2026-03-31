@@ -7,7 +7,6 @@ use App\Services\Subscriptions\SubscriptionManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class SubscriptionController extends Controller
 {
@@ -41,9 +40,10 @@ class SubscriptionController extends Controller
         try {
             $validated = $request->validate([
                 'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
-                'payer_email' => ['required', 'email:rfc'],
+                'payment_method' => ['nullable', Rule::in(['pix'])],
+                'payer_email' => ['nullable', 'email:rfc'],
             ]);
-        } catch (ValidationException $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             Log::warning('2. Falha na validacao em SubscriptionController@checkout', [
                 'errors' => $e->errors(),
             ]);
@@ -53,12 +53,13 @@ class SubscriptionController extends Controller
 
         Log::info('2. Validacao concluida em SubscriptionController@checkout', [
             'plan' => $validated['plan'],
+            'payment_method' => $validated['payment_method'] ?? 'pix',
         ]);
 
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
             (string) $validated['plan'],
-            (string) $validated['payer_email'],
+            $validated['payer_email'] ?? $request->user()->email,
         );
 
         Log::info('9. SubscriptionController@checkout finalizado com sucesso', [
@@ -93,10 +94,13 @@ class SubscriptionController extends Controller
      */
     private function serializeSubscription(UserSubscription $subscription): array
     {
+        $invoice = $subscription->invoices()->latest('id')->first();
+
         return [
             'id' => $subscription->id,
             'plan' => $subscription->plan_code,
             'status' => $subscription->status,
+            'provider' => $subscription->provider,
             'amount' => (float) $subscription->transaction_amount,
             'currency_id' => $subscription->currency_id,
             'frequency' => $subscription->frequency,
@@ -113,6 +117,16 @@ class SubscriptionController extends Controller
             'canceled_at' => $subscription->canceled_at?->toIso8601String(),
             'created_at' => $subscription->created_at?->toIso8601String(),
             'updated_at' => $subscription->updated_at?->toIso8601String(),
+            'latest_invoice' => $invoice ? [
+                'id' => $invoice->id,
+                'provider_payment_id' => $invoice->provider_payment_id,
+                'status' => $invoice->status,
+                'status_detail' => $invoice->status_detail,
+                'expires_at' => $invoice->expires_at?->toIso8601String(),
+                'paid_at' => $invoice->paid_at?->toIso8601String(),
+                'qr_code' => $invoice->qr_code,
+                'qr_code_base64' => $invoice->qr_code_base64,
+            ] : null,
         ];
     }
 }

@@ -15,6 +15,8 @@ return [
             'frequency' => 1,
             'frequency_type' => 'months',
             'monthly_equivalent' =>  env('MERCADO_PAGO_MONTHLY_PRICE'),
+            'checkout_mode' => env('DINFY_SUBSCRIPTION_CHECKOUT_MODE_MONTHLY', 'pix'),
+            'preapproval_plan_id' => env('MERCADO_PAGO_MONTHLY_PLAN_ID'),
         ],
         'yearly' => [
             'name' => 'Anual',
@@ -24,6 +26,8 @@ return [
             'frequency' => 12,
             'frequency_type' => 'months',
             'monthly_equivalent' =>  env('MERCADO_PAGO_YEARLY_PRICE') / 12,
+            'checkout_mode' => env('DINFY_SUBSCRIPTION_CHECKOUT_MODE_YEARLY', 'pix'),
+            'preapproval_plan_id' => env('MERCADO_PAGO_YEARLY_PLAN_ID'),
         ],
     ],
 ];

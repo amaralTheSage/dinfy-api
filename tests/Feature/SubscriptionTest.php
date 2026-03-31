@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\SubscriptionInvoice;
 use App\Models\User;
 use App\Models\UserSubscription;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
@@ -16,16 +18,31 @@ beforeEach(function (): void {
     config()->set('services.mercadopago.webhook_secret', '');
     config()->set('subscriptions.back_url', 'https://dinfy.app/assinatura');
     config()->set('subscriptions.notification_url', 'https://api.dinfy.app/api/mercado-pago/webhook');
-    config()->set('subscriptions.plans.monthly.checkout_mode', 'subscription_authorized');
-    config()->set('subscriptions.plans.monthly.preapproval_plan_id', 'preplan_monthly_123');
-    config()->set('subscriptions.plans.yearly.checkout_mode', 'subscription_authorized');
-    config()->set('subscriptions.plans.yearly.preapproval_plan_id', 'preplan_yearly_123');
+    config()->set('subscriptions.plans', [
+        'monthly' => [
+            'name' => 'Mensal',
+            'reason' => 'Dinfy - Mensal',
+            'amount' => 19.90,
+            'currency_id' => 'BRL',
+            'frequency' => 1,
+            'frequency_type' => 'months',
+            'monthly_equivalent' => 19.90,
+            'checkout_mode' => 'pix',
+        ],
+        'yearly' => [
+            'name' => 'Anual',
+            'reason' => 'Dinfy - Anual',
+            'amount' => 97.00,
+            'currency_id' => 'BRL',
+            'frequency' => 12,
+            'frequency_type' => 'months',
+            'monthly_equivalent' => round(97.00 / 12, 2),
+            'checkout_mode' => 'pix',
+        ],
+    ]);
 });
 
 it('lists the available subscription plans', function () {
-    $monthlyPlan = config('subscriptions.plans.monthly');
-    $yearlyPlan = config('subscriptions.plans.yearly');
-
     $user = User::factory()->create();
 
     Sanctum::actingAs($user);
@@ -36,11 +53,9 @@ it('lists the available subscription plans', function () {
         ->assertOk()
         ->assertJsonCount(2, 'plans')
         ->assertJsonPath('plans.0.code', 'monthly')
-        ->assertJsonPath('plans.1.code', 'yearly');
-
-    expect((float) $response->json('plans.0.amount'))->toBe((float) $monthlyPlan['amount']);
-    expect((float) $response->json('plans.1.amount'))->toBe((float) $yearlyPlan['amount']);
-    expect((float) $response->json('plans.1.monthly_equivalent'))->toBe((float) $yearlyPlan['monthly_equivalent']);
+        ->assertJsonPath('plans.1.code', 'yearly')
+        ->assertJsonPath('plans.0.frequency_type', 'months')
+        ->assertJsonPath('plans.1.frequency', 12);
 });
 
 it('returns a null current subscription when the user has no subscription yet', function () {
@@ -59,148 +74,24 @@ it('returns a null current subscription when the user has no subscription yet', 
     Http::assertNothingSent();
 });
 
-it('creates a hosted checkout session for an authorized subscription plan', function () {
-    Http::fake();
-
-    $user = User::factory()->create();
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/checkout/session', [
-        'plan' => 'monthly',
-    ]);
-
-    $response
-        ->assertCreated()
-        ->assertJsonPath('session.plan', 'monthly');
-
-    $checkoutPageUrl = $response->json('session.checkout_page_url');
-
-    expect($checkoutPageUrl)->toBeString();
-    expect($checkoutPageUrl)->toContain('/subscriptions/checkout/session/');
-
-    Http::assertNothingSent();
-});
-
-it('renders the hosted checkout page for a valid session', function () {
-    Http::fake();
-
-    $user = User::factory()->create([
-        'email' => 'checkout-page@example.com',
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $sessionResponse = $this->postJson('/api/subscriptions/checkout/session', [
-        'plan' => 'monthly',
-    ]);
-
-    $sessionResponse->assertCreated();
-
-    $sessionId = (string) $sessionResponse->json('session.id');
-
-    $response = $this->get("/subscriptions/checkout/session/{$sessionId}");
-
-    $response
-        ->assertOk()
-        ->assertSee('Pague de forma segura', false)
-        ->assertSee('Continuar para o checkout', false)
-        ->assertSee('R$ 19,90/mês', false);
-
-    Http::assertNothingSent();
-});
-
-it('rejects hosted checkout sessions for plans that still use pending checkout', function () {
-    config()->set('subscriptions.plans.monthly.checkout_mode', 'subscription_pending');
-
-    Http::fake();
-
-    $user = User::factory()->create();
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/checkout/session', [
-        'plan' => 'monthly',
-    ]);
-
-    $response->assertUnprocessable();
-
-    Http::assertNothingSent();
-});
-
-it('completes a hosted checkout session with a card token', function () {
-    $monthlyPlan = config('subscriptions.plans.monthly');
-
+it('creates a monthly hosted pix checkout and stores the first invoice', function () {
     Http::fake([
-        'https://api.mercadopago.com/preapproval' => Http::response([
-            'id' => 'preapp_session_123',
-            'preapproval_plan_id' => 'preplan_monthly_123',
-            'status' => 'authorized',
-            'reason' => 'Dinfy  - Mensal',
-            'auto_recurring' => [
-                'frequency' => 1,
-                'frequency_type' => 'months',
-                'transaction_amount' => (float) $monthlyPlan['amount'],
-                'currency_id' => 'BRL',
+        'https://api.mercadopago.com/v1/payments' => Http::response([
+            'id' => 'pay_pix_123',
+            'status' => 'pending',
+            'status_detail' => 'pending_waiting_payment',
+            'transaction_amount' => 19.90,
+            'currency_id' => 'BRL',
+            'date_created' => '2026-03-31T12:00:00.000Z',
+            'date_of_expiration' => '2026-04-03T00:00:00.000Z',
+            'point_of_interaction' => [
+                'transaction_data' => [
+                    'ticket_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
+                    'qr_code' => 'QR123',
+                    'qr_code_base64' => 'BASE64QR123',
+                    'expiration_date' => '2026-04-03T00:00:00.000Z',
+                ],
             ],
-            'date_created' => '2026-03-24T12:00:00.000Z',
-            'next_payment_date' => '2026-04-24T12:00:00.000Z',
-        ], 201),
-    ]);
-
-    $user = User::factory()->create([
-        'email' => 'checkout@example.com',
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $sessionResponse = $this->postJson('/api/subscriptions/checkout/session', [
-        'plan' => 'monthly',
-    ]);
-
-    $sessionResponse->assertCreated();
-
-    $sessionId = (string) $sessionResponse->json('session.id');
-
-    $response = $this->postJson("/api/subscriptions/checkout/session/{$sessionId}/complete", [
-        'card_token_id' => 'card_token_session_123',
-        'device_session_id' => 'device-session-hosted-123',
-    ]);
-
-    $response
-        ->assertOk()
-        ->assertJsonPath('subscription.plan', 'monthly')
-        ->assertJsonPath('subscription.status', 'authorized');
-
-    expect((string) $response->json('redirect_url'))->toStartWith('dinfy://subscription?');
-
-    Http::assertSent(function (HttpRequest $request): bool {
-        return $request->url() === 'https://api.mercadopago.com/preapproval'
-            && $request['preapproval_plan_id'] === 'preplan_monthly_123'
-            && $request['payer_email'] === 'checkout@example.com'
-            && $request['card_token_id'] === 'card_token_session_123'
-            && $request->hasHeader('X-meli-session-id', 'device-session-hosted-123')
-            && $request['status'] === 'authorized';
-    });
-});
-
-it('creates a monthly subscription checkout and stores the local summary', function () {
-    $monthlyPlan = config('subscriptions.plans.monthly');
-
-    Http::fake([
-        'https://api.mercadopago.com/preapproval' => Http::response([
-            'id' => 'preapp_123',
-            'preapproval_plan_id' => 'preplan_monthly_123',
-            'status' => 'authorized',
-            'reason' => 'Dinfy  - Mensal',
-            'auto_recurring' => [
-                'frequency' => 1,
-                'frequency_type' => 'months',
-                'transaction_amount' => (float) $monthlyPlan['amount'],
-                'currency_id' => 'BRL',
-            ],
-            'date_created' => '2026-03-24T12:00:00.000Z',
-            'next_payment_date' => '2026-04-24T12:00:00.000Z',
         ], 201),
     ]);
 
@@ -212,149 +103,61 @@ it('creates a monthly subscription checkout and stores the local summary', funct
 
     $response = $this->postJson('/api/subscriptions/checkout', [
         'plan' => 'monthly',
-        'card_token_id' => 'card_token_123',
-        'device_session_id' => 'device-session-direct-123',
     ]);
 
     $response
         ->assertCreated()
         ->assertJsonPath('subscription.plan', 'monthly')
-        ->assertJsonPath('subscription.status', 'authorized')
-        ->assertJsonPath('subscription.checkout_url', null)
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_123');
+        ->assertJsonPath('subscription.provider', 'pix')
+        ->assertJsonPath('subscription.status', 'pending')
+        ->assertJsonPath(
+            'subscription.checkout_url',
+            'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
+        )
+        ->assertJsonPath('subscription.latest_invoice.provider_payment_id', 'pay_pix_123')
+        ->assertJsonPath('subscription.latest_invoice.qr_code', 'QR123');
 
-    Http::assertSent(function (HttpRequest $request) use ($monthlyPlan): bool {
-        return $request->url() === 'https://api.mercadopago.com/preapproval'
-            && $request['payer_email'] === 'gabriel@example.com'
-            && $request['preapproval_plan_id'] === 'preplan_monthly_123'
-            && $request['card_token_id'] === 'card_token_123'
-            && $request->hasHeader('X-meli-session-id', 'device-session-direct-123')
-            && $request['status'] === 'authorized'
-            && $request['back_url'] === 'https://dinfy.app/assinatura'
-            && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
-            && !isset($request['auto_recurring']);
+    Http::assertSent(function (HttpRequest $request): bool {
+        return $request->url() === 'https://api.mercadopago.com/v1/payments'
+            && $request['payment_method_id'] === 'pix'
+            && $request['transaction_amount'] === 19.90
+            && data_get($request->data(), 'payer.email') === 'gabriel@example.com'
+            && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook';
     });
 
     $this->assertDatabaseHas('user_subscriptions', [
         'user_id' => $user->id,
+        'provider' => 'pix',
         'plan_code' => 'monthly',
-        'status' => 'authorized',
-        'mercado_pago_preapproval_id' => 'preapp_123',
+        'status' => 'pending',
+        'mercado_pago_payment_id' => 'pay_pix_123',
+        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
     ]);
 
-    $user->refresh();
-
-    expect($user->subscription_provider)->toBe('mercado_pago');
-    expect($user->subscription_plan)->toBe('monthly');
-    expect($user->subscription_status)->toBe('authorized');
-    expect($user->subscription_reference)->toBe('preapp_123');
+    $this->assertDatabaseHas('subscription_invoices', [
+        'provider_payment_id' => 'pay_pix_123',
+        'user_subscription_id' => $response->json('subscription.id'),
+        'status' => 'pending',
+    ]);
 });
 
-it('requires a card token to create an authorized subscription checkout', function () {
+it('rejects card as a checkout payment method', function () {
     Http::fake();
 
-    $user = User::factory()->create([
-        'email' => 'app-user@example.com',
-    ]);
+    $user = User::factory()->create();
 
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/subscriptions/checkout', [
         'plan' => 'monthly',
+        'payment_method' => 'card',
     ]);
 
     $response
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('card_token_id');
+        ->assertJsonValidationErrors('payment_method');
 
     Http::assertNothingSent();
-});
-
-it('fails when an associated mercado pago plan id is missing from configuration', function () {
-    config()->set('subscriptions.plans.monthly.preapproval_plan_id', null);
-
-    Http::fake([
-        'https://api.mercadopago.com/preapproval' => Http::response([], 201),
-    ]);
-
-    $user = User::factory()->create([
-        'email' => 'app-user@example.com',
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/checkout', [
-        'plan' => 'monthly',
-        'card_token_id' => 'card_token_123',
-    ]);
-
-    $response->assertStatus(500);
-
-    Http::assertNothingSent();
-});
-
-it('creates a yearly subscription checkout and stores the local summary', function () {
-    $yearlyPlan = config('subscriptions.plans.yearly');
-
-    Http::fake([
-        'https://api.mercadopago.com/preapproval' => Http::response([
-            'id' => 'preapp_yearly_123',
-            'preapproval_plan_id' => 'preplan_yearly_123',
-            'status' => 'authorized',
-            'reason' => 'Dinfy  - Anual',
-            'auto_recurring' => [
-                'frequency' => 12,
-                'frequency_type' => 'months',
-                'transaction_amount' => (float) $yearlyPlan['amount'],
-                'currency_id' => 'BRL',
-            ],
-            'date_created' => '2026-03-24T12:00:00.000Z',
-            'next_payment_date' => '2027-03-24T12:00:00.000Z',
-        ], 201),
-    ]);
-
-    $user = User::factory()->create([
-        'email' => 'gabriel@example.com',
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/checkout', [
-        'plan' => 'yearly',
-        'card_token_id' => 'card_token_yearly_123',
-    ]);
-
-    $response
-        ->assertCreated()
-        ->assertJsonPath('subscription.plan', 'yearly')
-        ->assertJsonPath('subscription.status', 'authorized')
-        ->assertJsonPath('subscription.checkout_url', null)
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_yearly_123');
-
-    Http::assertSent(function (HttpRequest $request) use ($yearlyPlan): bool {
-        return $request->url() === 'https://api.mercadopago.com/preapproval'
-            && $request['payer_email'] === 'gabriel@example.com'
-            && $request['preapproval_plan_id'] === 'preplan_yearly_123'
-            && $request['card_token_id'] === 'card_token_yearly_123'
-            && $request['status'] === 'authorized'
-            && $request['back_url'] === 'https://dinfy.app/assinatura'
-            && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook'
-            && !isset($request['auto_recurring']);
-    });
-
-    $this->assertDatabaseHas('user_subscriptions', [
-        'user_id' => $user->id,
-        'plan_code' => 'yearly',
-        'status' => 'authorized',
-        'mercado_pago_preapproval_id' => 'preapp_yearly_123',
-    ]);
-
-    $user->refresh();
-
-    expect($user->subscription_provider)->toBe('mercado_pago');
-    expect($user->subscription_plan)->toBe('yearly');
-    expect($user->subscription_status)->toBe('authorized');
-    expect($user->subscription_reference)->not()->toBeEmpty();
 });
 
 it('prevents creating a second subscription while one is still open', function () {
@@ -364,21 +167,23 @@ it('prevents creating a second subscription while one is still open', function (
 
     UserSubscription::query()->create([
         'user_id' => $user->id,
+        'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'pending',
-        'external_reference' => 'dinfy:user:' . $user->id . ':plan:monthly:existing',
-        'mercado_pago_preapproval_id' => 'preapp_existing',
+        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-existing',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
         'frequency_type' => 'months',
+        'mercado_pago_payment_id' => 'pay_existing_123',
+        'latest_payment_status' => 'pending',
+        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_existing_123',
     ]);
 
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/subscriptions/checkout', [
         'plan' => 'yearly',
-        'card_token_id' => 'card_token_123',
     ]);
 
     $response
@@ -388,108 +193,14 @@ it('prevents creating a second subscription while one is still open', function (
     Http::assertNothingSent();
 });
 
-it('cancels an authorized subscription through mercado pago', function () {
-    Http::fake([
-        'https://api.mercadopago.com/preapproval/preapp_authorized_123' => Http::response([
-            'id' => 'preapp_authorized_123',
-            'status' => 'canceled',
-            'external_reference' => 'dinfy-u-1-p-monthly-123',
-            'reason' => 'Dinfy  - Mensal',
-            'auto_recurring' => [
-                'frequency' => 1,
-                'frequency_type' => 'months',
-                'transaction_amount' => 19.90,
-                'currency_id' => 'BRL',
-            ],
-            'last_modified' => '2026-03-24T13:00:00.000Z',
-        ], 200),
-    ]);
-
-    $user = User::factory()->create();
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'monthly',
-        'status' => 'authorized',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-123',
-        'mercado_pago_preapproval_id' => 'preapp_authorized_123',
-        'transaction_amount' => 19.90,
-        'currency_id' => 'BRL',
-        'frequency' => 1,
-        'frequency_type' => 'months',
-        'started_at' => now(),
-        'next_payment_at' => now()->addMonth(),
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/current/cancel');
-
-    $response
-        ->assertOk()
-        ->assertJsonPath('subscription.status', 'canceled')
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_authorized_123');
-
-    Http::assertSent(function (HttpRequest $request): bool {
-        return $request->url() === 'https://api.mercadopago.com/preapproval/preapp_authorized_123'
-            && $request->method() === 'PUT'
-            && $request['status'] === 'canceled';
-    });
-
-    $subscription->refresh();
-    $user->refresh();
-
-    expect($subscription->status)->toBe('canceled');
-    expect($user->subscription_status)->toBe('canceled');
-});
-
-it('cancels a pending monthly preapproval locally without calling mercado pago', function () {
-    Http::fake();
-
-    $user = User::factory()->create();
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'monthly',
-        'status' => 'pending',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-123',
-        'mercado_pago_preapproval_id' => 'preapp_pending_123',
-        'transaction_amount' => 19.90,
-        'currency_id' => 'BRL',
-        'frequency' => 1,
-        'frequency_type' => 'months',
-        'checkout_url' => 'https://mp.example/subscription-checkout',
-    ]);
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/current/cancel');
-
-    $response
-        ->assertOk()
-        ->assertJsonPath('subscription.status', 'canceled')
-        ->assertJsonPath('subscription.checkout_url', null)
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_pending_123');
-
-    Http::assertNothingSent();
-
-    $subscription->refresh();
-    $user->refresh();
-
-    expect($subscription->status)->toBe('canceled');
-    expect($subscription->checkout_url)->toBeNull();
-    expect($subscription->mercado_pago_preapproval_id)->toBe('preapp_pending_123');
-    expect($user->subscription_status)->toBe('canceled');
-});
-
-it('cancels a pending yearly checkout payment through mercado pago when the payment already exists', function () {
+it('cancels a pending pix payment through mercado pago', function () {
     Http::fake([
         'https://api.mercadopago.com/v1/payments/pay_pending_123' => Http::response([
             'id' => 'pay_pending_123',
             'external_reference' => 'dinfy-u-1-p-yearly-123',
             'status' => 'canceled',
             'status_detail' => 'by_payer',
-            'date_last_updated' => '2026-03-24T13:00:00.000Z',
+            'date_last_updated' => '2026-03-31T14:00:00.000Z',
         ], 200),
     ]);
 
@@ -497,6 +208,7 @@ it('cancels a pending yearly checkout payment through mercado pago when the paym
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
+        'provider' => 'pix',
         'plan_code' => 'yearly',
         'status' => 'pending',
         'external_reference' => 'dinfy-u-' . $user->id . '-p-yearly-123',
@@ -506,6 +218,17 @@ it('cancels a pending yearly checkout payment through mercado pago when the paym
         'frequency' => 12,
         'frequency_type' => 'months',
         'latest_payment_status' => 'pending',
+        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pending_123',
+    ]);
+
+    SubscriptionInvoice::query()->create([
+        'user_subscription_id' => $subscription->id,
+        'provider' => 'mercado_pago',
+        'provider_payment_id' => 'pay_pending_123',
+        'external_reference' => $subscription->external_reference,
+        'transaction_amount' => 97.00,
+        'currency_id' => 'BRL',
+        'status' => 'pending',
     ]);
 
     Sanctum::actingAs($user);
@@ -516,7 +239,7 @@ it('cancels a pending yearly checkout payment through mercado pago when the paym
         ->assertOk()
         ->assertJsonPath('subscription.status', 'canceled')
         ->assertJsonPath('subscription.latest_payment_status', 'canceled')
-        ->assertJsonPath('subscription.mercado_pago_payment_id', 'pay_pending_123');
+        ->assertJsonPath('subscription.checkout_url', null);
 
     Http::assertSent(function (HttpRequest $request): bool {
         return $request->url() === 'https://api.mercadopago.com/v1/payments/pay_pending_123'
@@ -529,24 +252,28 @@ it('cancels a pending yearly checkout payment through mercado pago when the paym
 
     expect($subscription->status)->toBe('canceled');
     expect($subscription->latest_payment_status)->toBe('canceled');
+    expect($subscription->checkout_url)->toBeNull();
     expect($user->subscription_status)->toBe('canceled');
 });
 
-it('cancels a local yearly checkout before a payment is created', function () {
+it('cancels an active local pix subscription without calling mercado pago', function () {
     Http::fake();
 
     $user = User::factory()->create();
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
-        'plan_code' => 'yearly',
-        'status' => 'pending',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-yearly-123',
-        'transaction_amount' => 97.00,
+        'provider' => 'pix',
+        'plan_code' => 'monthly',
+        'status' => 'active',
+        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-active',
+        'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
-        'frequency' => 12,
+        'frequency' => 1,
         'frequency_type' => 'months',
-        'checkout_url' => 'https://mp.example/pix-checkout',
+        'started_at' => Carbon::parse('2026-03-01T12:00:00.000Z'),
+        'next_payment_at' => Carbon::parse('2026-04-01T12:00:00.000Z'),
+        'latest_payment_status' => 'approved',
     ]);
 
     Sanctum::actingAs($user);
@@ -556,7 +283,8 @@ it('cancels a local yearly checkout before a payment is created', function () {
     $response
         ->assertOk()
         ->assertJsonPath('subscription.status', 'canceled')
-        ->assertJsonPath('subscription.checkout_url', null);
+        ->assertJsonPath('subscription.checkout_url', null)
+        ->assertJsonPath('subscription.next_payment_at', null);
 
     Http::assertNothingSent();
 
@@ -564,113 +292,92 @@ it('cancels a local yearly checkout before a payment is created', function () {
     $user->refresh();
 
     expect($subscription->status)->toBe('canceled');
-    expect($subscription->checkout_url)->toBeNull();
+    expect($subscription->next_payment_at)->toBeNull();
     expect($user->subscription_status)->toBe('canceled');
 });
 
-it('ignores webhook updates for a locally canceled pending preapproval checkout', function () {
+it('syncs approved payments using mercado pago timestamps and preserves invoice history', function () {
     $user = User::factory()->create();
-    $externalReference = 'dinfy-u-' . $user->id . '-p-monthly-abc';
+    $externalReference = 'dinfy-u-' . $user->id . '-p-monthly-renewal';
 
     Http::fake([
-        'https://api.mercadopago.com/preapproval/search*' => Http::response([
-            'results' => [[
-                'id' => 'preapp_123',
-                'external_reference' => $externalReference,
-                'status' => 'authorized',
-                'reason' => 'Dinfy  - Mensal',
-                'auto_recurring' => [
-                    'frequency' => 1,
-                    'frequency_type' => 'months',
-                    'transaction_amount' => 19.90,
-                    'currency_id' => 'BRL',
+        'https://api.mercadopago.com/v1/payments/pay_renewal_456' => Http::response([
+            'id' => 'pay_renewal_456',
+            'external_reference' => $externalReference,
+            'status' => 'approved',
+            'status_detail' => 'accredited',
+            'transaction_amount' => 19.90,
+            'currency_id' => 'BRL',
+            'date_approved' => '2026-04-01T15:00:00.000Z',
+            'date_last_updated' => '2026-04-01T15:01:00.000Z',
+            'point_of_interaction' => [
+                'transaction_data' => [
+                    'ticket_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_renewal_456',
                 ],
-                'date_created' => '2026-03-24T12:00:00.000Z',
-                'next_payment_date' => '2026-04-24T12:00:00.000Z',
-            ]],
+            ],
         ], 200),
     ]);
 
     $subscription = UserSubscription::query()->create([
         'user_id' => $user->id,
+        'provider' => 'pix',
         'plan_code' => 'monthly',
-        'status' => 'canceled',
+        'status' => 'active',
         'external_reference' => $externalReference,
-        'mercado_pago_preapproval_id' => 'preapp_123',
+        'mercado_pago_payment_id' => 'pay_initial_123',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
         'frequency_type' => 'months',
-        'canceled_at' => now(),
+        'started_at' => Carbon::parse('2026-03-01T12:00:00.000Z'),
+        'next_payment_at' => Carbon::parse('2026-04-01T12:00:00.000Z'),
+        'latest_payment_status' => 'approved',
     ]);
 
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=preapp_123', [
-        'type' => 'subscription_preapproval',
-        'data' => [
-            'id' => 'preapp_123',
-        ],
-    ]);
-
-    $response->assertOk()->assertJsonPath('ok', true);
-
-    $subscription->refresh();
-    $user->refresh();
-
-    expect($subscription->status)->toBe('canceled');
-    expect($subscription->started_at)->toBeNull();
-});
-
-it('updates the subscription status from a mercado pago webhook', function () {
-    $user = User::factory()->create();
-    $externalReference = 'dinfy:user:' . $user->id . ':plan:monthly:abc';
-
-    Http::fake([
-        'https://api.mercadopago.com/preapproval/search*' => Http::response([
-            'results' => [[
-                'id' => 'preapp_123',
-                'external_reference' => $externalReference,
-                'status' => 'authorized',
-                'reason' => 'Dinfy  - Mensal',
-                'auto_recurring' => [
-                    'frequency' => 1,
-                    'frequency_type' => 'months',
-                    'transaction_amount' => 19.90,
-                    'currency_id' => 'BRL',
-                ],
-                'date_created' => '2026-03-24T12:00:00.000Z',
-                'next_payment_date' => '2026-04-24T12:00:00.000Z',
-            ]],
-        ], 200),
-    ]);
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'monthly',
-        'status' => 'pending',
+    SubscriptionInvoice::query()->create([
+        'user_subscription_id' => $subscription->id,
+        'provider' => 'mercado_pago',
+        'provider_payment_id' => 'pay_initial_123',
         'external_reference' => $externalReference,
-        'mercado_pago_preapproval_id' => 'preapp_123',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
-        'frequency' => 1,
-        'frequency_type' => 'months',
+        'status' => 'approved',
+        'paid_at' => Carbon::parse('2026-03-01T12:00:00.000Z'),
     ]);
 
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=preapp_123', [
-        'type' => 'subscription_preapproval',
+    $response = $this->postJson('/api/mercado-pago/webhook?data.id=pay_renewal_456', [
+        'type' => 'payment',
         'data' => [
-            'id' => 'preapp_123',
+            'id' => 'pay_renewal_456',
         ],
     ]);
 
-    $response->assertOk()->assertJsonPath('ok', true);
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true);
 
     $subscription->refresh();
     $user->refresh();
 
-    expect($subscription->status)->toBe('authorized');
-    expect($subscription->next_payment_at?->toIso8601String())->toStartWith('2026-04-24T12:00:00');
-    expect($user->subscription_status)->toBe('authorized');
-    expect($user->subscription_reference)->toBe('preapp_123');
+    expect($subscription->status)->toBe('active');
+    expect($subscription->mercado_pago_payment_id)->toBe('pay_renewal_456');
+    expect($subscription->started_at?->toIso8601String())->toStartWith('2026-04-01T15:00:00');
+    expect($subscription->next_payment_at?->toIso8601String())->toStartWith('2026-05-01T15:00:00');
+    expect($subscription->checkout_url)->toBeNull();
+    expect($user->subscription_status)->toBe('active');
+
+    expect(
+        SubscriptionInvoice::query()
+            ->where('user_subscription_id', $subscription->id)
+            ->count()
+    )->toBe(2);
+
+    $renewalInvoice = SubscriptionInvoice::query()
+        ->where('provider_payment_id', 'pay_renewal_456')
+        ->first();
+
+    expect($renewalInvoice)->not()->toBeNull();
+    expect($renewalInvoice?->paid_at?->toIso8601String())->toStartWith('2026-04-01T15:00:00');
 });
 
 it('rejects webhook requests with an invalid signature when a secret is configured', function () {
@@ -712,155 +419,9 @@ it('accepts a valid webhook signature even when data.id exists only in the body'
         'x-request-id' => $requestId,
     ]);
 
-    $response->assertOk()->assertJsonPath('ok', true);
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true);
 
     Http::assertNothingSent();
-});
-
-it('stores the authorized payment id separately from the real payment id', function () {
-    $user = User::factory()->create();
-    $externalReference = 'dinfy:user:' . $user->id . ':plan:monthly:abc';
-
-    Http::fake([
-        'https://api.mercadopago.com/authorized_payments/authpay_123' => Http::response([
-            'id' => 'authpay_123',
-            'preapproval_id' => 'preapp_123',
-            'payment_id' => 'pay_987',
-            'status' => 'processed',
-            'date_created' => '2026-03-24T12:00:00.000Z',
-        ], 200),
-        'https://api.mercadopago.com/preapproval/search*' => Http::response([
-            'results' => [[
-                'id' => 'preapp_123',
-                'external_reference' => $externalReference,
-                'status' => 'authorized',
-                'reason' => 'Dinfy  - Mensal',
-                'auto_recurring' => [
-                    'frequency' => 1,
-                    'frequency_type' => 'months',
-                    'transaction_amount' => 19.90,
-                    'currency_id' => 'BRL',
-                ],
-                'date_created' => '2026-03-24T12:00:00.000Z',
-            ]],
-        ], 200),
-    ]);
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'monthly',
-        'status' => 'pending',
-        'external_reference' => $externalReference,
-        'mercado_pago_preapproval_id' => 'preapp_123',
-        'transaction_amount' => 19.90,
-        'currency_id' => 'BRL',
-        'frequency' => 1,
-        'frequency_type' => 'months',
-    ]);
-
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=authpay_123', [
-        'type' => 'subscription_authorized_payment',
-        'data' => [
-            'id' => 'authpay_123',
-        ],
-    ]);
-
-    $response->assertOk();
-
-    $subscription->refresh();
-
-    expect($subscription->mercado_pago_authorized_payment_id)->toBe('authpay_123');
-    expect($subscription->mercado_pago_payment_id)->toBe('pay_987');
-    expect($subscription->latest_payment_status)->toBe('processed');
-});
-
-it('uses the payment timestamps instead of the local current time when syncing payments', function () {
-    $user = User::factory()->create();
-    $externalReference = 'dinfy:user:' . $user->id . ':plan:monthly:abc';
-
-    Http::fake([
-        'https://api.mercadopago.com/v1/payments/pay_987' => Http::response([
-            'id' => 'pay_987',
-            'external_reference' => $externalReference,
-            'status' => 'approved',
-            'status_detail' => 'accredited',
-            'date_approved' => '2026-03-24T12:34:56.000Z',
-        ], 200),
-    ]);
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'monthly',
-        'status' => 'pending',
-        'external_reference' => $externalReference,
-        'transaction_amount' => 19.90,
-        'currency_id' => 'BRL',
-        'frequency' => 1,
-        'frequency_type' => 'months',
-    ]);
-
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=pay_987', [
-        'type' => 'payment',
-        'data' => [
-            'id' => 'pay_987',
-        ],
-    ]);
-
-    $response->assertOk();
-
-    $subscription->refresh();
-
-    expect($subscription->mercado_pago_payment_id)->toBe('pay_987');
-    expect($subscription->started_at?->toIso8601String())->toStartWith('2026-03-24T12:34:56');
-});
-
-it('activates the yearly checkout plan for 12 months when the payment is approved', function () {
-    $user = User::factory()->create();
-    $externalReference = 'dinfy-u-' . $user->id . '-p-yearly-abc';
-
-    Http::fake([
-        'https://api.mercadopago.com/v1/payments/pay_yearly_123' => Http::response([
-            'id' => 'pay_yearly_123',
-            'external_reference' => $externalReference,
-            'status' => 'approved',
-            'status_detail' => 'accredited',
-            'date_approved' => '2026-03-24T12:34:56.000Z',
-            'point_of_interaction' => [
-                'transaction_data' => [
-                    'ticket_url' => 'https://mp.example/pix-ticket',
-                ],
-            ],
-        ], 200),
-    ]);
-
-    $subscription = UserSubscription::query()->create([
-        'user_id' => $user->id,
-        'plan_code' => 'yearly',
-        'status' => 'pending',
-        'external_reference' => $externalReference,
-        'transaction_amount' => 97.00,
-        'currency_id' => 'BRL',
-        'frequency' => 12,
-        'frequency_type' => 'months',
-    ]);
-
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=pay_yearly_123', [
-        'type' => 'payment',
-        'data' => [
-            'id' => 'pay_yearly_123',
-        ],
-    ]);
-
-    $response->assertOk();
-
-    $subscription->refresh();
-    $user->refresh();
-
-    expect($subscription->status)->toBe('active');
-    expect($subscription->mercado_pago_payment_id)->toBe('pay_yearly_123');
-    expect($subscription->checkout_url)->toBe('https://mp.example/pix-ticket');
-    expect($subscription->started_at?->toIso8601String())->toStartWith('2026-03-24T12:34:56');
-    expect($subscription->next_payment_at?->toIso8601String())->toStartWith('2027-03-24T12:34:56');
-    expect($user->subscription_status)->toBe('active');
-    expect($user->subscription_plan)->toBe('yearly');
 });

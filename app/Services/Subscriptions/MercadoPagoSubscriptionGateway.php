@@ -5,6 +5,7 @@ namespace App\Services\Subscriptions;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -20,6 +21,8 @@ class MercadoPagoSubscriptionGateway
         array $plan,
         string $externalReference,
         string $payerEmail,
+        ?string $cardTokenId = null,
+        ?string $deviceSessionId = null,
     ): array {
         Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPendingPreapproval', [
             'plan' => $plan['code'] ?? null,
@@ -40,6 +43,14 @@ class MercadoPagoSubscriptionGateway
             'status' => 'pending',
         ];
 
+        if (!empty($cardTokenId)) {
+            $payload['card_token_id'] = $cardTokenId;
+        }
+
+        if (!empty($deviceSessionId)) {
+            $payload['device_session_id'] = $deviceSessionId;
+        }
+
         $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
         if ($notificationUrl !== '') {
             $payload['notification_url'] = $notificationUrl;
@@ -50,6 +61,47 @@ class MercadoPagoSubscriptionGateway
                 'X-Idempotency-Key' => (string) Str::uuid(),
             ])
             ->post('/preapproval', $payload)
+            ->throw()
+            ->json();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function createPixPayment(array $data): array
+    {
+        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPixPayment', [
+            'external_reference' => $data['external_reference'] ?? null,
+            'transaction_amount' => $data['transaction_amount'] ?? null,
+        ]);
+
+        $payload = [
+            'transaction_amount' => $data['transaction_amount'],
+            'currency_id' => $data['currency_id'] ?? 'BRL',
+            'payment_method_id' => 'pix',
+            'description' => $data['description'] ?? $data['external_reference'] ?? 'Dinfy subscription',
+            'external_reference' => $data['external_reference'],
+            'payer' => [
+                'email' => $data['payer_email'] ?? null,
+            ],
+        ];
+
+        if (!empty($data['notification_url'])) {
+            $payload['notification_url'] = $data['notification_url'];
+        }
+
+        if (!empty($data['expires_at'])) {
+            $payload['date_of_expiration'] = Carbon::parse($data['expires_at'])->toIso8601String();
+        } else {
+            $payload['date_of_expiration'] = Carbon::now()->addDays(3)->toIso8601String();
+        }
+
+        return $this->request()
+            ->withHeaders([
+                'X-Idempotency-Key' => (string) Str::uuid(),
+            ])
+            ->post('/v1/payments', $payload)
             ->throw()
             ->json();
     }
