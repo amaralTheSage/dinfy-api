@@ -66,11 +66,8 @@ class SubscriptionManager
     public function createCheckout(
         User $user,
         string $planCode,
-        ?string $payerEmail = null,
-        ?string $cardTokenId = null,
-        ?string $deviceSessionId = null,
-    ): UserSubscription
-    {
+        string $payerEmail,
+    ): UserSubscription {
         Log::info('3. Entrou em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
             'plan' => $planCode,
@@ -101,31 +98,19 @@ class SubscriptionManager
             ]);
         }
 
-        $checkoutMode = strtolower(trim((string) ($plan['checkout_mode'] ?? 'subscription_pending')));
         $externalReference = $this->generateExternalReference($user, $planCode);
 
         Log::info('4. Validacoes de negocio concluidas em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
             'plan' => $planCode,
-            'checkout_mode' => $checkoutMode,
             'external_reference' => $externalReference,
         ]);
 
-        $payload = match ($checkoutMode) {
-            'subscription_authorized' => $this->mercadoPago->createAuthorizedPreapprovalWithPlan(
-                $plan,
-                $externalReference,
-                $this->resolveAuthorizedPayerEmail($user, $payerEmail),
-                $this->requireCardToken($cardTokenId),
-                $this->normalizeOptionalDeviceSessionId($deviceSessionId),
-            ),
-            'subscription_pending' => $this->mercadoPago->createPendingPreapproval(
-                $plan,
-                $externalReference,
-                $this->requirePendingPayerEmail($payerEmail),
-            ),
-            default => throw new RuntimeException('Unsupported subscription checkout mode: ' . $checkoutMode),
-        };
+        $payload = $this->mercadoPago->createPendingPreapproval(
+            $plan,
+            $externalReference,
+            $this->requirePendingPayerEmail($payerEmail),
+        );
 
         Log::info('6. Payload recebido do gateway em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
@@ -154,26 +139,6 @@ class SubscriptionManager
         return $this->applySubscriptionPayload($subscription, $payload);
     }
 
-    private function resolveAuthorizedPayerEmail(User $user, ?string $payerEmail = null): string
-    {
-        $resolved = trim((string) ($payerEmail ?? $user->email));
-        Log::info('5. Validando payer_email em SubscriptionManager@resolveAuthorizedPayerEmail', [
-            'user_id' => $user->id,
-        ]);
-
-        if ($resolved === '') {
-            Log::warning('5. Falha ao resolver payer_email em SubscriptionManager@resolveAuthorizedPayerEmail', [
-                'user_id' => $user->id,
-            ]);
-
-            throw ValidationException::withMessages([
-                'email' => ['O usuário precisa ter um e-mail válido para assinar.'],
-            ]);
-        }
-
-        return $resolved;
-    }
-
     private function requirePendingPayerEmail(?string $payerEmail): string
     {
         $resolved = trim((string) $payerEmail);
@@ -188,29 +153,6 @@ class SubscriptionManager
         }
 
         return $resolved;
-    }
-
-    private function requireCardToken(?string $cardTokenId): string
-    {
-        $resolved = trim((string) $cardTokenId);
-        Log::info('5. Validando card_token_id em SubscriptionManager@requireCardToken');
-
-        if ($resolved === '') {
-            Log::warning('5. Falha na validacao do card_token_id em SubscriptionManager@requireCardToken');
-
-            throw ValidationException::withMessages([
-                'card_token_id' => ['Informe o token do cartão gerado pelo checkout do Mercado Pago.'],
-            ]);
-        }
-
-        return $resolved;
-    }
-
-    private function normalizeOptionalDeviceSessionId(?string $deviceSessionId): ?string
-    {
-        $resolved = trim((string) $deviceSessionId);
-
-        return $resolved !== '' ? $resolved : null;
     }
 
     public function cancelCurrent(User $user): UserSubscription
@@ -734,7 +676,7 @@ class SubscriptionManager
                 $subscription->next_payment_at,
                 $subscription->canceled_at,
             ],
-            'canceled', 'canceled', 'rejected', 'refunded', 'charged_back' => [
+            'canceled', 'rejected', 'refunded', 'charged_back' => [
                 'canceled',
                 null,
                 $this->parseDate(Arr::get($payload, 'date_last_updated') ?? Arr::get($payload, 'date_created'))

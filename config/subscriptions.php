@@ -15,8 +15,6 @@ return [
             'frequency' => 1,
             'frequency_type' => 'months',
             'monthly_equivalent' => 19.90,
-            'checkout_mode' => 'subscription_authorized',
-            'preapproval_plan_id' => env('MERCADO_PAGO_MONTHLY_PLAN_ID') ?: null,
         ],
         'yearly' => [
             'name' => 'Anual',
@@ -26,8 +24,6 @@ return [
             'frequency' => 12,
             'frequency_type' => 'months',
             'monthly_equivalent' => 8.08,
-            'checkout_mode' => 'subscription_authorized',
-            'preapproval_plan_id' => env('MERCADO_PAGO_YEARLY_PLAN_ID') ?: null,
         ],
     ],
 ];

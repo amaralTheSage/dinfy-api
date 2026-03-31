@@ -41,9 +41,7 @@ class SubscriptionController extends Controller
         try {
             $validated = $request->validate([
                 'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
-                'payer_email' => ['nullable', 'email:rfc'],
-                'card_token_id' => ['nullable', 'string'],
-                'device_session_id' => ['nullable', 'string'],
+                'payer_email' => ['required', 'email:rfc'],
             ]);
         } catch (ValidationException $e) {
             Log::warning('2. Falha na validacao em SubscriptionController@checkout', [
@@ -60,9 +58,7 @@ class SubscriptionController extends Controller
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
             (string) $validated['plan'],
-            isset($validated['payer_email']) ? (string) $validated['payer_email'] : null,
-            isset($validated['card_token_id']) ? (string) $validated['card_token_id'] : null,
-            isset($validated['device_session_id']) ? (string) $validated['device_session_id'] : null,
+            (string) $validated['payer_email'],
         );
 
         Log::info('9. SubscriptionController@checkout finalizado com sucesso', [

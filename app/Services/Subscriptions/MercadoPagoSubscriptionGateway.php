@@ -20,8 +20,7 @@ class MercadoPagoSubscriptionGateway
         array $plan,
         string $externalReference,
         string $payerEmail,
-    ): array
-    {
+    ): array {
         Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPendingPreapproval', [
             'plan' => $plan['code'] ?? null,
             'external_reference' => $externalReference,
@@ -50,64 +49,6 @@ class MercadoPagoSubscriptionGateway
             ->withHeaders([
                 'X-Idempotency-Key' => (string) Str::uuid(),
             ])
-            ->post('/preapproval', $payload)
-            ->throw()
-            ->json();
-    }
-
-    /**
-     * @param array<string, mixed> $plan
-     * @return array<string, mixed>
-     */
-    public function createAuthorizedPreapprovalWithPlan(
-        array $plan,
-        string $externalReference,
-        string $payerEmail,
-        string $cardTokenId,
-        ?string $deviceSessionId = null,
-    ): array
-    {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createAuthorizedPreapprovalWithPlan', [
-            'plan' => $plan['code'] ?? null,
-            'external_reference' => $externalReference,
-            'has_device_session_id' => trim((string) $deviceSessionId) !== '',
-        ]);
-
-        $preapprovalPlanId = trim((string) ($plan['preapproval_plan_id'] ?? ''));
-        if ($preapprovalPlanId === '') {
-            Log::warning('5. preapproval_plan_id ausente em MercadoPagoSubscriptionGateway@createAuthorizedPreapprovalWithPlan', [
-                'plan' => $plan['code'] ?? null,
-            ]);
-
-            throw new RuntimeException('Mercado Pago preapproval plan ID is not configured for this subscription plan.');
-        }
-
-        $payload = [
-            'preapproval_plan_id' => $preapprovalPlanId,
-            'reason' => $plan['reason'],
-            'external_reference' => $externalReference,
-            'payer_email' => $payerEmail,
-            'card_token_id' => $cardTokenId,
-            'back_url' => config('subscriptions.back_url'),
-            'status' => 'authorized',
-        ];
-
-        $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
-        if ($notificationUrl !== '') {
-            $payload['notification_url'] = $notificationUrl;
-        }
-
-        $headers = [
-            'X-Idempotency-Key' => (string) Str::uuid(),
-        ];
-
-        $deviceSessionId = trim((string) $deviceSessionId);
-        if ($deviceSessionId !== '') {
-            $headers['X-meli-session-id'] = $deviceSessionId;
-        }
-
-        return $this->request()
-            ->withHeaders($headers)
             ->post('/preapproval', $payload)
             ->throw()
             ->json();

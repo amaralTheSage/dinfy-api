@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\SubscriptionCheckoutSessionController;
 use Illuminate\Support\Facades\Route;
 
 $testCheckoutData = function (): array {
@@ -49,23 +48,6 @@ $testCheckoutData = function (): array {
     ];
 };
 
-Route::get(
-    '/subscriptions/checkout/session/{session}',
-    [SubscriptionCheckoutSessionController::class, 'intro'],
-)->name('subscription.checkout.page');
-
-Route::get(
-    '/subscriptions/checkout/session/{session}/payment',
-    [SubscriptionCheckoutSessionController::class, 'show'],
-)->name('subscription.checkout.form');
-
 Route::get('/check', function () use ($testCheckoutData) {
-    return view('subscriptions.intro', [
-        ...$testCheckoutData(),
-        'checkoutUrl' => route('subscription.checkout.test.form'),
-    ]);
+    return response()->json($testCheckoutData());
 });
-
-Route::get('/check/payment', function () use ($testCheckoutData) {
-    return view('subscriptions.checkout', $testCheckoutData());
-})->name('subscription.checkout.test.form');

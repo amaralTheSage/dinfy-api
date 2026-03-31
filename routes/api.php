@@ -9,7 +9,6 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\FinancialAccountController;
 use App\Http\Controllers\FinancialTransactionController;
 use App\Http\Controllers\FinancialBudgetController;
-use App\Http\Controllers\SubscriptionCheckoutSessionController;
 use App\Http\Controllers\SubscriptionController;
 
 Route::prefix('auth')->group(function () {
@@ -32,7 +31,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);
     Route::get('/subscriptions/current', [SubscriptionController::class, 'current']);
     Route::post('/subscriptions/checkout', [SubscriptionController::class, 'checkout']);
-    Route::post('/subscriptions/checkout/session', [SubscriptionCheckoutSessionController::class, 'store']);
     Route::post('/subscriptions/current/cancel', [SubscriptionController::class, 'cancel']);
 
     Route::apiResource('accounts', FinancialAccountController::class);
@@ -44,11 +42,6 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
     Route::apiResource('budgets', FinancialBudgetController::class);
 });
-
-Route::post(
-    '/subscriptions/checkout/session/{session}/complete',
-    [SubscriptionCheckoutSessionController::class, 'complete'],
-)->name('subscription.checkout.complete');
 
 Route::prefix('assistant')
     ->middleware('assistant.secret')
