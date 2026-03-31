@@ -74,23 +74,20 @@ it('returns a null current subscription when the user has no subscription yet', 
     Http::assertNothingSent();
 });
 
-it('creates a monthly hosted pix checkout and stores the first invoice', function () {
+it('creates a monthly hosted mercado pago checkout link', function () {
     Http::fake([
-        'https://api.mercadopago.com/v1/payments' => Http::response([
-            'id' => 'pay_pix_123',
+        'https://api.mercadopago.com/preapproval' => Http::response([
+            'id' => 'preapp_pix_123',
             'status' => 'pending',
-            'status_detail' => 'pending_waiting_payment',
-            'transaction_amount' => 19.90,
-            'currency_id' => 'BRL',
             'date_created' => '2026-03-31T12:00:00.000Z',
-            'date_of_expiration' => '2026-04-03T00:00:00.000Z',
-            'point_of_interaction' => [
-                'transaction_data' => [
-                    'ticket_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
-                    'qr_code' => 'QR123',
-                    'qr_code_base64' => 'BASE64QR123',
-                    'expiration_date' => '2026-04-03T00:00:00.000Z',
-                ],
+            'init_point' => 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=preapp_pix_123',
+            'sandbox_init_point' => 'https://sandbox.mercadopago.com.br/subscriptions/checkout?preapproval_id=preapp_pix_123',
+            'external_reference' => 'dinfy-u-1-p-monthly-test',
+            'auto_recurring' => [
+                'frequency' => 1,
+                'frequency_type' => 'months',
+                'transaction_amount' => 19.90,
+                'currency_id' => 'BRL',
             ],
         ], 201),
     ]);
@@ -112,16 +109,16 @@ it('creates a monthly hosted pix checkout and stores the first invoice', functio
         ->assertJsonPath('subscription.status', 'pending')
         ->assertJsonPath(
             'subscription.checkout_url',
-            'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
+            'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=preapp_pix_123',
         )
-        ->assertJsonPath('subscription.latest_invoice.provider_payment_id', 'pay_pix_123')
-        ->assertJsonPath('subscription.latest_invoice.qr_code', 'QR123');
+        ->assertJsonPath('subscription.mercado_pago_preapproval_id', 'preapp_pix_123')
+        ->assertJsonPath('subscription.latest_invoice', null);
 
     Http::assertSent(function (HttpRequest $request): bool {
-        return $request->url() === 'https://api.mercadopago.com/v1/payments'
-            && $request['payment_method_id'] === 'pix'
-            && $request['transaction_amount'] === 19.90
-            && data_get($request->data(), 'payer.email') === 'gabriel@example.com'
+        return $request->url() === 'https://api.mercadopago.com/preapproval'
+            && $request['status'] === 'pending'
+            && $request['payer_email'] === 'gabriel@example.com'
+            && data_get($request->data(), 'auto_recurring.transaction_amount') === 19.90
             && $request['notification_url'] === 'https://api.dinfy.app/api/mercado-pago/webhook';
     });
 
@@ -130,14 +127,8 @@ it('creates a monthly hosted pix checkout and stores the first invoice', functio
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'pending',
-        'mercado_pago_payment_id' => 'pay_pix_123',
-        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pix_123',
-    ]);
-
-    $this->assertDatabaseHas('subscription_invoices', [
-        'provider_payment_id' => 'pay_pix_123',
-        'user_subscription_id' => $response->json('subscription.id'),
-        'status' => 'pending',
+        'mercado_pago_preapproval_id' => 'preapp_pix_123',
+        'checkout_url' => 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=preapp_pix_123',
     ]);
 });
 

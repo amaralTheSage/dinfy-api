@@ -2,6 +2,7 @@
 
 namespace App\Services\Subscriptions;
 
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -56,13 +57,23 @@ class MercadoPagoSubscriptionGateway
             $payload['notification_url'] = $notificationUrl;
         }
 
-        return $this->request()
-            ->withHeaders([
-                'X-Idempotency-Key' => (string) Str::uuid(),
-            ])
-            ->post('/preapproval', $payload)
-            ->throw()
-            ->json();
+        try {
+            return $this->request()
+                ->withHeaders([
+                    'X-Idempotency-Key' => (string) Str::uuid(),
+                ])
+                ->post('/preapproval', $payload)
+                ->throw()
+                ->json();
+        } catch (RequestException $exception) {
+            Log::error('Mercado Pago preapproval request failed.', [
+                'payload' => $payload,
+                'response_status' => $exception->response?->status(),
+                'response_body' => $exception->response?->body(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     /**
@@ -97,13 +108,23 @@ class MercadoPagoSubscriptionGateway
             $payload['date_of_expiration'] = Carbon::now()->addDays(3)->toIso8601String();
         }
 
-        return $this->request()
-            ->withHeaders([
-                'X-Idempotency-Key' => (string) Str::uuid(),
-            ])
-            ->post('/v1/payments', $payload)
-            ->throw()
-            ->json();
+        try {
+            return $this->request()
+                ->withHeaders([
+                    'X-Idempotency-Key' => (string) Str::uuid(),
+                ])
+                ->post('/v1/payments', $payload)
+                ->throw()
+                ->json();
+        } catch (RequestException $exception) {
+            Log::error('Mercado Pago payment request failed.', [
+                'payload' => $payload,
+                'response_status' => $exception->response?->status(),
+                'response_body' => $exception->response?->body(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     /**

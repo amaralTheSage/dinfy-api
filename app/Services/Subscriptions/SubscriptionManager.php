@@ -67,6 +67,9 @@ class SubscriptionManager
         User $user,
         string $planCode,
         ?string $payerEmail = null,
+        string $paymentMethod = 'pix',
+        ?string $cardTokenId = null,
+        ?string $deviceSessionId = null,
     ): UserSubscription {
         Log::info('3. Entrou em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
@@ -109,8 +112,7 @@ class SubscriptionManager
 
         $resolvedPayerEmail = $this->requirePendingPayerEmail($payerEmail ?? $user->email);
 
-        return $this->createPixCheckout(
-            $user,
+        $payload = $this->mercadoPago->createPendingPreapproval(
             $plan,
             $externalReference,
             $resolvedPayerEmail,
@@ -122,14 +124,6 @@ class SubscriptionManager
             ]);
         }
 
-        $payload = $this->mercadoPago->createPendingPreapproval(
-            $plan,
-            $externalReference,
-            $resolvedPayerEmail,
-            $cardTokenId,
-            $deviceSessionId,
-        );
-
         Log::info('6. Payload recebido do gateway em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
             'status' => Arr::get($payload, 'status'),
@@ -139,7 +133,7 @@ class SubscriptionManager
         $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
             return UserSubscription::query()->create([
                 'user_id' => $user->id,
-                'provider' => 'mercado_pago',
+                'provider' => 'pix',
                 'plan_code' => (string) $plan['code'],
                 'status' => 'pending',
                 'external_reference' => $externalReference,
