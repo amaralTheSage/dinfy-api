@@ -87,15 +87,31 @@ class MercadoPagoSubscriptionGateway
             'transaction_amount' => $data['transaction_amount'] ?? null,
         ]);
 
+        $payer = [
+            'email' => $data['payer_email'] ?? null,
+        ];
+
+        if (!empty($data['payer_first_name'])) {
+            $payer['first_name'] = $data['payer_first_name'];
+        }
+
+        if (!empty($data['payer_last_name'])) {
+            $payer['last_name'] = $data['payer_last_name'];
+        }
+
+        if (!empty($data['payer_identification_number'])) {
+            $payer['identification'] = [
+                'type' => $data['payer_identification_type'] ?? 'CPF',
+                'number' => $data['payer_identification_number'],
+            ];
+        }
+
         $payload = [
             'transaction_amount' => $data['transaction_amount'],
-            'currency_id' => $data['currency_id'] ?? 'BRL',
             'payment_method_id' => 'pix',
             'description' => $data['description'] ?? $data['external_reference'] ?? 'Dinfy subscription',
             'external_reference' => $data['external_reference'],
-            'payer' => [
-                'email' => $data['payer_email'] ?? null,
-            ],
+            'payer' => $payer,
         ];
 
         if (!empty($data['notification_url'])) {
@@ -103,9 +119,7 @@ class MercadoPagoSubscriptionGateway
         }
 
         if (!empty($data['expires_at'])) {
-            $payload['date_of_expiration'] = Carbon::parse($data['expires_at'])->toIso8601String();
-        } else {
-            $payload['date_of_expiration'] = Carbon::now()->addDays(3)->toIso8601String();
+            $payload['date_of_expiration'] = Carbon::parse($data['expires_at'])->format('Y-m-d\TH:i:s.vP');
         }
 
         try {

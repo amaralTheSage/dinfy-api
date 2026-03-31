@@ -42,6 +42,7 @@ class SubscriptionController extends Controller
                 'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
                 'payment_method' => ['nullable', Rule::in(['pix'])],
                 'payer_email' => ['nullable', 'email:rfc'],
+                'payer_document' => ['required', 'string', 'max:30'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::warning('2. Falha na validacao em SubscriptionController@checkout', [
@@ -60,6 +61,7 @@ class SubscriptionController extends Controller
             $request->user(),
             (string) $validated['plan'],
             $validated['payer_email'] ?? $request->user()->email,
+            (string) $validated['payer_document'],
         );
 
         Log::info('9. SubscriptionController@checkout finalizado com sucesso', [
@@ -123,6 +125,7 @@ class SubscriptionController extends Controller
                 'status' => $invoice->status,
                 'status_detail' => $invoice->status_detail,
                 'expires_at' => $invoice->expires_at?->toIso8601String(),
+                'qr_code_expires_at' => $invoice->qr_code_expires_at?->toIso8601String(),
                 'paid_at' => $invoice->paid_at?->toIso8601String(),
                 'qr_code' => $invoice->qr_code,
                 'qr_code_base64' => $invoice->qr_code_base64,

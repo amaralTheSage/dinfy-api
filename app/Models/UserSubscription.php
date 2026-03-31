@@ -21,6 +21,8 @@ class UserSubscription extends Model
         'currency_id',
         'frequency',
         'frequency_type',
+        'payer_document_type',
+        'payer_document_number',
         'checkout_url',
         'sandbox_checkout_url',
         'latest_payment_status',

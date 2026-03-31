@@ -67,9 +67,8 @@ class SubscriptionManager
         User $user,
         string $planCode,
         ?string $payerEmail = null,
-        string $paymentMethod = 'pix',
-        ?string $cardTokenId = null,
-        ?string $deviceSessionId = null,
+        ?string $payerDocument = null,
+        ?string $payerDocumentType = 'CPF',
     ): UserSubscription {
         Log::info('3. Entrou em SubscriptionManager@createCheckout', [
             'user_id' => $user->id,
@@ -111,11 +110,18 @@ class SubscriptionManager
         ]);
 
         $resolvedPayerEmail = $this->requirePendingPayerEmail($payerEmail ?? $user->email);
+        $resolvedPayerDocument = $this->requirePendingPayerDocument(
+            $payerDocument,
+            $payerDocumentType ?? 'CPF',
+        );
 
-        $payload = $this->mercadoPago->createPendingPreapproval(
+        return $this->createPixCheckout(
+            $user,
             $plan,
             $externalReference,
             $resolvedPayerEmail,
+            $resolvedPayerDocument['number'],
+            $resolvedPayerDocument['type'],
         );
 
         if (strtolower($paymentMethod) === 'card' && empty($cardTokenId)) {
@@ -157,9 +163,32 @@ class SubscriptionManager
         array $plan,
         string $externalReference,
         string $payerEmail,
+        string $payerDocumentNumber,
+        string $payerDocumentType,
     ): UserSubscription {
-        $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
-            return UserSubscription::query()->create([
+        [$payerFirstName, $payerLastName] = $this->splitPayerName($user->name);
+
+        $payment = $this->mercadoPago->createPixPayment([
+            'transaction_amount' => $plan['amount'],
+            'external_reference' => $externalReference,
+            'payer_email' => $payerEmail,
+            'payer_first_name' => $payerFirstName,
+            'payer_last_name' => $payerLastName,
+            'payer_identification_number' => $payerDocumentNumber,
+            'payer_identification_type' => $payerDocumentType,
+            'description' => $plan['reason'] ?? "Dinfy - " . ($plan['name'] ?? ''),
+            'notification_url' => config('subscriptions.notification_url'),
+        ]);
+
+        $subscription = DB::transaction(function () use (
+            $user,
+            $plan,
+            $externalReference,
+            $payment,
+            $payerDocumentNumber,
+            $payerDocumentType,
+        ): UserSubscription {
+            $subscription = UserSubscription::query()->create([
                 'user_id' => $user->id,
                 'provider' => 'pix',
                 'plan_code' => (string) $plan['code'],
@@ -169,41 +198,28 @@ class SubscriptionManager
                 'currency_id' => (string) $plan['currency_id'],
                 'frequency' => (int) $plan['frequency'],
                 'frequency_type' => (string) $plan['frequency_type'],
+                'payer_document_type' => $payerDocumentType,
+                'payer_document_number' => $payerDocumentNumber,
             ]);
+
+            SubscriptionInvoice::query()->create([
+                'user_subscription_id' => $subscription->id,
+                'provider' => 'mercado_pago',
+                'provider_payment_id' => (string) Arr::get($payment, 'id', ''),
+                'external_reference' => $externalReference,
+                'transaction_amount' => (float) $plan['amount'],
+                'currency_id' => $plan['currency_id'],
+                'status' => (string) Arr::get($payment, 'status', 'pending'),
+                'status_detail' => (string) Arr::get($payment, 'status_detail'),
+                'expires_at' => $this->parseDate(Arr::get($payment, 'date_of_expiration')),
+                'qr_code' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code'),
+                'qr_code_base64' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code_base64'),
+                'qr_code_expires_at' => $this->parseDate(Arr::get($payment, 'point_of_interaction.transaction_data.expiration_date')),
+                'raw_payload' => $payment,
+            ]);
+
+            return $subscription;
         });
-
-        $payment = $this->mercadoPago->createPixPayment([
-            'transaction_amount' => $plan['amount'],
-            'currency_id' => $plan['currency_id'],
-            'external_reference' => $externalReference,
-            'payer_email' => $payerEmail,
-            'description' => $plan['reason'] ?? "Dinfy - " . ($plan['name'] ?? ''),
-            'notification_url' => config('subscriptions.notification_url'),
-            'expires_at' => now()->addDays(3)->toIso8601String(),
-        ]);
-
-        SubscriptionInvoice::query()->create([
-            'user_subscription_id' => $subscription->id,
-            'provider' => 'mercado_pago',
-            'provider_payment_id' => (string) Arr::get($payment, 'id', ''),
-            'external_reference' => $externalReference,
-            'transaction_amount' => (float) $plan['amount'],
-            'currency_id' => $plan['currency_id'],
-            'status' => (string) Arr::get($payment, 'status', 'pending'),
-            'status_detail' => (string) Arr::get($payment, 'status_detail'),
-            'expires_at' => $this->parseDate(Arr::get($payment, 'date_of_expiration')),
-            'qr_code' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code'),
-            'qr_code_base64' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code_base64'),
-            'qr_code_expires_at' => $this->parseDate(Arr::get($payment, 'point_of_interaction.transaction_data.expiration_date')),
-            'raw_payload' => $payment,
-        ]);
-
-        $subscription->latest_payment_status = (string) Arr::get($payment, 'status', 'pending');
-        $subscription->latest_payment_status_detail = (string) Arr::get($payment, 'status_detail');
-        $subscription->mercado_pago_payment_id = (string) Arr::get($payment, 'id', '');
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
 
         return $this->applyPaymentPayload($subscription, $payment, (string) Arr::get($payment, 'id'));
     }
@@ -222,6 +238,41 @@ class SubscriptionManager
         }
 
         return $resolved;
+    }
+
+    /**
+     * @return array{type:string,number:string}
+     */
+    private function requirePendingPayerDocument(?string $payerDocument, string $payerDocumentType = 'CPF'): array
+    {
+        $resolvedType = strtoupper(trim($payerDocumentType));
+        $normalizedNumber = preg_replace('/\D+/', '', (string) $payerDocument) ?? '';
+
+        Log::info('5. Validando payer_document em SubscriptionManager@requirePendingPayerDocument', [
+            'type' => $resolvedType,
+            'length' => strlen($normalizedNumber),
+        ]);
+
+        if ($resolvedType === '') {
+            $resolvedType = 'CPF';
+        }
+
+        $expectedLength = match ($resolvedType) {
+            'CPF' => 11,
+            'CNPJ' => 14,
+            default => null,
+        };
+
+        if ($normalizedNumber === '' || ($expectedLength !== null && strlen($normalizedNumber) !== $expectedLength)) {
+            throw ValidationException::withMessages([
+                'payer_document' => ['Informe um CPF valido para gerar o pagamento PIX.'],
+            ]);
+        }
+
+        return [
+            'type' => $resolvedType,
+            'number' => $normalizedNumber,
+        ];
     }
 
     public function cancelCurrent(User $user): UserSubscription
@@ -630,7 +681,9 @@ class SubscriptionManager
             );
         }
 
-        $checkoutUrl = $this->checkoutUrlFromPayload($payload, $subscription->checkout_url);
+        $checkoutUrl = $subscription->mercado_pago_preapproval_id
+            ? $this->checkoutUrlFromPayload($payload, $subscription->checkout_url)
+            : null;
         if ($status !== 'pending') {
             $checkoutUrl = null;
         }
@@ -640,6 +693,8 @@ class SubscriptionManager
             'mercado_pago_payment_id' => $paymentId !== '' ? $paymentId : $subscription->mercado_pago_payment_id,
             'latest_payment_status' => $paymentStatus !== '' ? $paymentStatus : $subscription->latest_payment_status,
             'latest_payment_status_detail' => $paymentStatusDetail !== '' ? $paymentStatusDetail : $subscription->latest_payment_status_detail,
+            'payer_document_type' => Arr::get($payload, 'payer.identification.type', $subscription->payer_document_type),
+            'payer_document_number' => Arr::get($payload, 'payer.identification.number', $subscription->payer_document_number),
             'started_at' => $startedAt,
             'next_payment_at' => $nextPaymentAt,
             'canceled_at' => $canceledAt,
@@ -714,6 +769,24 @@ class SubscriptionManager
             'user_id' => (int) $matches[1],
             'plan_code' => strtolower((string) $matches[2]),
         ];
+    }
+
+    /**
+     * @return array{0:?string,1:?string}
+     */
+    private function splitPayerName(?string $fullName): array
+    {
+        $parts = preg_split('/\s+/', trim((string) $fullName)) ?: [];
+        $parts = array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
+
+        if ($parts === []) {
+            return [null, null];
+        }
+
+        $firstName = $parts[0];
+        $lastName = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : null;
+
+        return [$firstName, $lastName];
     }
 
     private function generateExternalReference(User $user, string $planCode): string
