@@ -116,7 +116,7 @@ class SubscriptionManager
             'payer_last_name' => $payerLastName,
             'payer_identification_number' => $payerDocumentNumber,
             'payer_identification_type' => $payerDocumentType,
-            'description' => $plan['reason'] ?? 'Dinfy - '.($plan['name'] ?? ''),
+            'description' => $plan['reason'] ?? 'Dinfy - ' . ($plan['name'] ?? ''),
             'notification_url' => config('subscriptions.notification_url'),
         ]);
 
@@ -257,7 +257,7 @@ class SubscriptionManager
         Log::info('5. Validando payer_email em SubscriptionManager@requirePendingPayerEmail');
 
         if ($resolved === '') {
-            Log::warning('5. Falha na validacao do payer_email em SubscriptionManager@requirePendingPayerEmail');
+            Log::warning('5. Falha na validação do payer_email em SubscriptionManager@requirePendingPayerEmail');
 
             throw ValidationException::withMessages([
                 'payer_email' => ['Informe um e-mail valido para gerar o pagamento PIX.'],
@@ -821,7 +821,7 @@ class SubscriptionManager
     private function splitPayerName(?string $fullName): array
     {
         $parts = preg_split('/\s+/', trim((string) $fullName)) ?: [];
-        $parts = array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
+        $parts = array_values(array_filter($parts, fn(string $part): bool => $part !== ''));
 
         if ($parts === []) {
             return [null, null];

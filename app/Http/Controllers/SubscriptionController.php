@@ -45,14 +45,14 @@ class SubscriptionController extends Controller
                 'payer_document' => ['required', 'string', 'max:30'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::warning('2. Falha na validacao em SubscriptionController@checkout', [
+            Log::warning('2. Falha na validação em SubscriptionController@checkout', [
                 'errors' => $e->errors(),
             ]);
 
             throw $e;
         }
 
-        Log::info('2. Validacao concluida em SubscriptionController@checkout', [
+        Log::info('2. Validação concluida em SubscriptionController@checkout', [
             'plan' => $validated['plan'],
             'payment_method' => $validated['payment_method'] ?? 'pix',
         ]);
