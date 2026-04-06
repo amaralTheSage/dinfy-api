@@ -2,11 +2,11 @@
 
 namespace App\Services\Subscriptions;
 
-use App\Models\User;
 use App\Models\SubscriptionInvoice;
+use App\Models\User;
 use App\Models\UserSubscription;
-use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +28,12 @@ class SubscriptionManager
 
     private const OPEN_STATUSES = ['pending', 'authorized', 'active', 'paused'];
 
+    private const PAYMENT_PENDING_STATUSES = ['pending', 'in_process'];
+
+    private const PAYMENT_APPROVED_STATUSES = ['approved', 'accredited'];
+
+    private const PAYMENT_CANCELED_STATUSES = ['canceled', 'rejected', 'refunded', 'charged_back'];
+
     public function __construct(
         private readonly SubscriptionCatalog $catalog,
         private readonly MercadoPagoSubscriptionGateway $mercadoPago,
@@ -45,22 +51,11 @@ class SubscriptionManager
     {
         $subscription = $this->currentSubscriptionQuery($user)->first();
 
-        if (
-            $sync
-            && $subscription
-            && in_array($subscription->status, self::OPEN_STATUSES, true)
-        ) {
-            if ($subscription->mercado_pago_preapproval_id) {
-                $subscription = $this->syncByMercadoPagoId($subscription->mercado_pago_preapproval_id) ?? $subscription->fresh();
-            } elseif (
-                $subscription->mercado_pago_payment_id
-                && in_array((string) $subscription->latest_payment_status, ['pending', 'in_process'], true)
-            ) {
-                $subscription = $this->syncPayment($subscription->mercado_pago_payment_id) ?? $subscription->fresh();
-            }
+        if (! $sync || ! $subscription || ! $this->isOpenStatus($subscription->status)) {
+            return $subscription;
         }
 
-        return $subscription;
+        return $this->syncCurrentSubscription($subscription) ?? $subscription->fresh();
     }
 
     public function createCheckout(
@@ -76,30 +71,8 @@ class SubscriptionManager
             'payment_method' => 'pix',
         ]);
 
-        $plan = $this->catalog->get($planCode);
-        if (!$plan) {
-            Log::warning('4. Plano invalido em SubscriptionManager@createCheckout', [
-                'user_id' => $user->id,
-                'plan' => $planCode,
-            ]);
-
-            throw ValidationException::withMessages([
-                'plan' => ['Plano de assinatura inválido.'],
-            ]);
-        }
-
-        $current = $this->currentSubscriptionQuery($user)->first();
-        if ($current && in_array($current->status, self::OPEN_STATUSES, true)) {
-            Log::warning('4. Usuario ja possui assinatura em aberto em SubscriptionManager@createCheckout', [
-                'user_id' => $user->id,
-                'current_subscription_id' => $current->id,
-                'current_status' => $current->status,
-            ]);
-
-            throw ValidationException::withMessages([
-                'plan' => ['Já existe uma assinatura em andamento para este usuário.'],
-            ]);
-        }
+        $plan = $this->requirePlan($user, $planCode);
+        $this->ensureUserDoesNotHaveOpenSubscription($user);
 
         $externalReference = $this->generateExternalReference($user, $planCode);
 
@@ -123,39 +96,6 @@ class SubscriptionManager
             $resolvedPayerDocument['number'],
             $resolvedPayerDocument['type'],
         );
-
-        if (strtolower($paymentMethod) === 'card' && empty($cardTokenId)) {
-            throw ValidationException::withMessages([
-                'card_token_id' => ['O token do cartão é obrigatório para pagamento com cartão.'],
-            ]);
-        }
-
-        Log::info('6. Payload recebido do gateway em SubscriptionManager@createCheckout', [
-            'user_id' => $user->id,
-            'status' => Arr::get($payload, 'status'),
-            'preapproval_id' => Arr::get($payload, 'id'),
-        ]);
-
-        $subscription = DB::transaction(function () use ($user, $plan, $externalReference): UserSubscription {
-            return UserSubscription::query()->create([
-                'user_id' => $user->id,
-                'provider' => 'pix',
-                'plan_code' => (string) $plan['code'],
-                'status' => 'pending',
-                'external_reference' => $externalReference,
-                'transaction_amount' => (float) $plan['amount'],
-                'currency_id' => (string) $plan['currency_id'],
-                'frequency' => (int) $plan['frequency'],
-                'frequency_type' => (string) $plan['frequency_type'],
-            ]);
-        });
-
-        Log::info('7. Assinatura salva localmente em SubscriptionManager@createCheckout', [
-            'subscription_id' => $subscription->id,
-            'user_id' => $user->id,
-        ]);
-
-        return $this->applySubscriptionPayload($subscription, $payload);
     }
 
     private function createPixCheckout(
@@ -176,7 +116,7 @@ class SubscriptionManager
             'payer_last_name' => $payerLastName,
             'payer_identification_number' => $payerDocumentNumber,
             'payer_identification_type' => $payerDocumentType,
-            'description' => $plan['reason'] ?? "Dinfy - " . ($plan['name'] ?? ''),
+            'description' => $plan['reason'] ?? 'Dinfy - '.($plan['name'] ?? ''),
             'notification_url' => config('subscriptions.notification_url'),
         ]);
 
@@ -222,6 +162,93 @@ class SubscriptionManager
         });
 
         return $this->applyPaymentPayload($subscription, $payment, (string) Arr::get($payment, 'id'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requirePlan(User $user, string $planCode): array
+    {
+        $plan = $this->catalog->get($planCode);
+        if ($plan) {
+            return $plan;
+        }
+
+        Log::warning('4. Plano invalido em SubscriptionManager@createCheckout', [
+            'user_id' => $user->id,
+            'plan' => $planCode,
+        ]);
+
+        throw ValidationException::withMessages([
+            'plan' => ['Plano de assinatura invalido.'],
+        ]);
+    }
+
+    private function ensureUserDoesNotHaveOpenSubscription(User $user): void
+    {
+        $current = $this->currentOpenSubscription($user);
+        if (! $current) {
+            return;
+        }
+
+        Log::warning('4. Usuario ja possui assinatura em aberto em SubscriptionManager@createCheckout', [
+            'user_id' => $user->id,
+            'current_subscription_id' => $current->id,
+            'current_status' => $current->status,
+        ]);
+
+        throw ValidationException::withMessages([
+            'plan' => ['Ja existe uma assinatura em andamento para este usuario.'],
+        ]);
+    }
+
+    private function currentOpenSubscription(User $user): ?UserSubscription
+    {
+        $subscription = $this->currentSubscriptionQuery($user)->first();
+
+        return $subscription && $this->isOpenStatus($subscription->status)
+            ? $subscription
+            : null;
+    }
+
+    private function syncCurrentSubscription(UserSubscription $subscription): ?UserSubscription
+    {
+        if ($this->usesLegacyPreapproval($subscription)) {
+            return $this->syncByMercadoPagoId((string) $subscription->mercado_pago_preapproval_id);
+        }
+
+        if (
+            $subscription->mercado_pago_payment_id
+            && in_array((string) $subscription->latest_payment_status, self::PAYMENT_PENDING_STATUSES, true)
+        ) {
+            return $this->syncPayment($subscription->mercado_pago_payment_id);
+        }
+
+        return $subscription;
+    }
+
+    private function cancelPendingSubscription(UserSubscription $subscription): UserSubscription
+    {
+        Log::info('4. Assinatura pendente encontrada em SubscriptionManager@cancelCurrent', [
+            'subscription_id' => $subscription->id,
+        ]);
+
+        if ($subscription->mercado_pago_payment_id && $this->canCancelStandalonePayment($subscription)) {
+            Log::info('5. Cancelando pagamento standalone em SubscriptionManager@cancelCurrent', [
+                'subscription_id' => $subscription->id,
+                'payment_id' => $subscription->mercado_pago_payment_id,
+            ]);
+
+            $payload = $this->mercadoPago->cancelPayment($subscription->mercado_pago_payment_id);
+
+            return $this->applyPaymentPayload(
+                $subscription,
+                $payload,
+                $subscription->mercado_pago_payment_id,
+            );
+        }
+
+        return $this->cancelLocalPendingCheckout($subscription);
     }
 
     private function requirePendingPayerEmail(?string $payerEmail): string
@@ -275,15 +302,25 @@ class SubscriptionManager
         ];
     }
 
+    private function isOpenStatus(?string $status): bool
+    {
+        return in_array((string) $status, self::OPEN_STATUSES, true);
+    }
+
+    private function usesLegacyPreapproval(UserSubscription $subscription): bool
+    {
+        return trim((string) $subscription->mercado_pago_preapproval_id) !== '';
+    }
+
     public function cancelCurrent(User $user): UserSubscription
     {
         Log::info('3. Entrou em SubscriptionManager@cancelCurrent', [
             'user_id' => $user->id,
         ]);
 
-        $subscription = $this->currentSubscriptionQuery($user)->first();
+        $subscription = $this->currentOpenSubscription($user);
 
-        if (!$subscription || !in_array($subscription->status, self::OPEN_STATUSES, true)) {
+        if (! $subscription) {
             Log::warning('4. Nenhuma assinatura cancelavel encontrada em SubscriptionManager@cancelCurrent', [
                 'user_id' => $user->id,
             ]);
@@ -294,35 +331,16 @@ class SubscriptionManager
         }
 
         if ($subscription->status === 'pending') {
-            Log::info('4. Assinatura pendente encontrada em SubscriptionManager@cancelCurrent', [
-                'subscription_id' => $subscription->id,
-            ]);
-
-            if ($subscription->mercado_pago_payment_id && $this->canCancelStandalonePayment($subscription)) {
-                Log::info('5. Cancelando pagamento standalone em SubscriptionManager@cancelCurrent', [
-                    'subscription_id' => $subscription->id,
-                    'payment_id' => $subscription->mercado_pago_payment_id,
-                ]);
-
-                $payload = $this->mercadoPago->cancelPayment($subscription->mercado_pago_payment_id);
-
-                return $this->applyPaymentPayload(
-                    $subscription,
-                    $payload,
-                    $subscription->mercado_pago_payment_id,
-                );
-            }
-
-            return $this->cancelLocalPendingCheckout($subscription);
+            return $this->cancelPendingSubscription($subscription);
         }
 
-        if ($subscription->mercado_pago_preapproval_id) {
-            Log::info('5. Cancelando preapproval em SubscriptionManager@cancelCurrent', [
+        if ($this->usesLegacyPreapproval($subscription)) {
+            Log::info('5. Cancelando preapproval legado em SubscriptionManager@cancelCurrent', [
                 'subscription_id' => $subscription->id,
                 'preapproval_id' => $subscription->mercado_pago_preapproval_id,
             ]);
 
-            $payload = $this->mercadoPago->cancelPreapproval($subscription->mercado_pago_preapproval_id);
+            $payload = $this->mercadoPago->cancelPreapproval((string) $subscription->mercado_pago_preapproval_id);
 
             return $this->applySubscriptionPayload($subscription, $payload);
         }
@@ -334,7 +352,7 @@ class SubscriptionManager
     {
         Log::info('2. Entrou em SubscriptionManager@handleWebhook');
 
-        if ($this->mercadoPago->hasWebhookSecret() && !$this->mercadoPago->isValidWebhookSignature($request)) {
+        if ($this->mercadoPago->hasWebhookSecret() && ! $this->mercadoPago->isValidWebhookSignature($request)) {
             Log::warning('3. Assinatura do webhook invalida em SubscriptionManager@handleWebhook');
 
             abort(401, 'Invalid Mercado Pago signature.');
@@ -344,9 +362,9 @@ class SubscriptionManager
         $resourceId = (string) ($request->query('data.id') ?? data_get($request->all(), 'data.id', ''));
 
         match ($type) {
+            'payment' => $resourceId !== '' ? $this->syncPayment($resourceId) : null,
             'subscription_preapproval' => $resourceId !== '' ? $this->syncByMercadoPagoId($resourceId) : null,
             'subscription_authorized_payment' => $resourceId !== '' ? $this->syncAuthorizedPayment($resourceId) : null,
-            'payment' => $resourceId !== '' ? $this->syncPayment($resourceId) : null,
             default => Log::info('Mercado Pago webhook ignored.', [
                 'type' => $type,
                 'resource_id' => $resourceId,
@@ -363,7 +381,7 @@ class SubscriptionManager
         $payload = $this->mercadoPago->fetchPreapproval($preapprovalId);
         $subscription = $this->resolveSubscriptionFromPreapprovalPayload($payload);
 
-        if (!$subscription) {
+        if (! $subscription) {
             Log::warning('Mercado Pago subscription payload could not be matched locally.', [
                 'preapproval_id' => $preapprovalId,
                 'external_reference' => Arr::get($payload, 'external_reference'),
@@ -392,11 +410,9 @@ class SubscriptionManager
         ]);
 
         $payload = $this->mercadoPago->fetchPayment($paymentId);
-        $subscription = UserSubscription::query()
-            ->where('external_reference', (string) Arr::get($payload, 'external_reference'))
-            ->first();
+        $subscription = $this->resolveSubscriptionFromPaymentPayload($payload, $paymentId);
 
-        if (!$subscription) {
+        if (! $subscription) {
             Log::info('Mercado Pago payment ignored because no local subscription was found.', [
                 'payment_id' => $paymentId,
                 'external_reference' => Arr::get($payload, 'external_reference'),
@@ -409,8 +425,8 @@ class SubscriptionManager
 
         $subscription = $this->applyPaymentPayload($subscription, $payload, $paymentId);
 
-        if ($subscription->mercado_pago_preapproval_id) {
-            return $this->syncByMercadoPagoId($subscription->mercado_pago_preapproval_id) ?? $subscription;
+        if ($this->usesLegacyPreapproval($subscription)) {
+            return $this->syncByMercadoPagoId((string) $subscription->mercado_pago_preapproval_id) ?? $subscription;
         }
 
         return $subscription;
@@ -422,10 +438,10 @@ class SubscriptionManager
             ->where('provider_payment_id', $providerPaymentId)
             ->first();
 
-        if (!$invoice) {
+        if (! $invoice) {
             $invoice = SubscriptionInvoice::query()->create([
                 'user_subscription_id' => $subscription->id,
-                'provider' => $subscription->provider ?? 'mercado_pago',
+                'provider' => 'mercado_pago',
                 'provider_payment_id' => $providerPaymentId,
                 'external_reference' => $subscription->external_reference,
                 'transaction_amount' => (float) Arr::get($payload, 'transaction_amount', $subscription->transaction_amount),
@@ -436,6 +452,8 @@ class SubscriptionManager
             ]);
         }
 
+        $status = (string) Arr::get($payload, 'status', $invoice->status);
+
         $invoice->forceFill([
             'provider_payment_id' => $providerPaymentId,
             'external_reference' => (string) Arr::get($payload, 'external_reference', $invoice->external_reference),
@@ -444,13 +462,13 @@ class SubscriptionManager
                 $invoice->transaction_amount,
             ),
             'currency_id' => (string) Arr::get($payload, 'currency_id', $invoice->currency_id),
-            'status' => (string) Arr::get($payload, 'status', $invoice->status),
+            'status' => $status,
             'status_detail' => (string) Arr::get($payload, 'status_detail', $invoice->status_detail),
             'expires_at' => $this->parseDate(Arr::get($payload, 'date_of_expiration')) ?? $invoice->expires_at,
-            'paid_at' => in_array((string) Arr::get($payload, 'status'), ['approved', 'accredited'], true)
+            'paid_at' => in_array($status, self::PAYMENT_APPROVED_STATUSES, true)
                 ? ($this->paymentApprovedAt($payload) ?? $invoice->paid_at ?? now())
                 : $invoice->paid_at,
-            'canceled_at' => in_array((string) Arr::get($payload, 'status'), ['canceled', 'rejected', 'refunded', 'charged_back'], true)
+            'canceled_at' => in_array($status, self::PAYMENT_CANCELED_STATUSES, true)
                 ? ($this->paymentCanceledAt($payload) ?? $invoice->canceled_at ?? now())
                 : $invoice->canceled_at,
             'qr_code' => Arr::get($payload, 'point_of_interaction.transaction_data.qr_code', $invoice->qr_code),
@@ -481,13 +499,13 @@ class SubscriptionManager
                 ->first();
         }
 
-        if (!$subscription) {
+        if (! $subscription) {
             $subscription = UserSubscription::query()
                 ->where('external_reference', (string) Arr::get($payload, 'external_reference'))
                 ->first();
         }
 
-        if (!$subscription) {
+        if (! $subscription) {
             Log::info('Mercado Pago authorized payment ignored because no local subscription was found.', [
                 'authorized_payment_id' => $authorizedPaymentId,
                 'preapproval_id' => $preapprovalId,
@@ -517,8 +535,33 @@ class SubscriptionManager
             ->latest('created_at');
     }
 
+    private function resolveSubscriptionFromPaymentPayload(array $payload, string $paymentId): ?UserSubscription
+    {
+        $externalReference = (string) Arr::get($payload, 'external_reference');
+
+        if ($externalReference === '' && $paymentId === '') {
+            return null;
+        }
+
+        $query = UserSubscription::query();
+
+        if ($externalReference !== '') {
+            $query->where('external_reference', $externalReference);
+        }
+
+        if ($paymentId !== '') {
+            if ($externalReference !== '') {
+                $query->orWhere('mercado_pago_payment_id', $paymentId);
+            } else {
+                $query->where('mercado_pago_payment_id', $paymentId);
+            }
+        }
+
+        return $query->first();
+    }
+
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function resolveSubscriptionFromPreapprovalPayload(array $payload): ?UserSubscription
     {
@@ -550,19 +593,20 @@ class SubscriptionManager
         }
 
         $parsedReference = $this->parseExternalReference($externalReference);
-        if (!$parsedReference) {
+        if (! $parsedReference) {
             return null;
         }
 
         $user = User::query()->find($parsedReference['user_id']);
         $plan = $this->catalog->get($parsedReference['plan_code']);
 
-        if (!$user || !$plan) {
+        if (! $user || ! $plan) {
             return null;
         }
 
         return UserSubscription::query()->create([
             'user_id' => $user->id,
+            'provider' => 'mercado_pago',
             'plan_code' => (string) $plan['code'],
             'status' => (string) Arr::get($payload, 'status', 'pending'),
             'external_reference' => $externalReference,
@@ -575,7 +619,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function applySubscriptionPayload(UserSubscription $subscription, array $payload): UserSubscription
     {
@@ -587,7 +631,7 @@ class SubscriptionManager
         $status = (string) Arr::get($payload, 'status', $subscription->status);
 
         $subscription->forceFill([
-            'provider' => $subscription->provider ?? 'mercado_pago',
+            'provider' => 'mercado_pago',
             'mercado_pago_preapproval_id' => Arr::get($payload, 'id', $subscription->mercado_pago_preapproval_id),
             'status' => $status,
             'external_reference' => Arr::get($payload, 'external_reference', $subscription->external_reference),
@@ -607,27 +651,23 @@ class SubscriptionManager
                 Arr::get($payload, 'next_payment_date')
                     ?? Arr::get($payload, 'auto_recurring.next_payment_date')
             ) ?? $subscription->next_payment_at,
-            'canceled_at' => in_array($status, ['canceled', 'canceled'], true)
+            'canceled_at' => $status === 'canceled'
                 ? ($this->parseDate(Arr::get($payload, 'last_modified') ?? Arr::get($payload, 'date_modified')) ?? $subscription->canceled_at ?? now())
                 : null,
             'last_notified_at' => now(),
             'raw_payload' => $payload,
         ]);
 
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
-
         Log::info('9. Payload de assinatura aplicado em SubscriptionManager@applySubscriptionPayload', [
             'subscription_id' => $subscription->id,
             'status' => $status,
         ]);
 
-        return $subscription->fresh();
+        return $this->persistSubscription($subscription);
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function applyPaymentPayload(
         UserSubscription $subscription,
@@ -668,8 +708,8 @@ class SubscriptionManager
         $nextPaymentAt = $subscription->next_payment_at;
         $canceledAt = $subscription->canceled_at;
 
-        if (!$subscription->mercado_pago_preapproval_id) {
-            if (in_array(strtolower($paymentStatus), ['approved', 'accredited'], true) && $approvedAt) {
+        if (! $this->usesLegacyPreapproval($subscription)) {
+            if (in_array(strtolower($paymentStatus), self::PAYMENT_APPROVED_STATUSES, true) && $approvedAt) {
                 $startedAt = $approvedAt;
             }
 
@@ -681,7 +721,7 @@ class SubscriptionManager
             );
         }
 
-        $checkoutUrl = $subscription->mercado_pago_preapproval_id
+        $checkoutUrl = $this->usesLegacyPreapproval($subscription)
             ? $this->checkoutUrlFromPayload($payload, $subscription->checkout_url)
             : null;
         if ($status !== 'pending') {
@@ -703,28 +743,32 @@ class SubscriptionManager
             'latest_payment_payload' => $payload,
         ]);
 
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
-
         Log::info('9. Payload de pagamento aplicado em SubscriptionManager@applyPaymentPayload', [
             'subscription_id' => $subscription->id,
-            'status' => $subscription->status,
+            'status' => $status,
             'payment_status' => $paymentStatus,
         ]);
+
+        return $this->persistSubscription($subscription);
+    }
+
+    private function persistSubscription(UserSubscription $subscription): UserSubscription
+    {
+        $subscription->save();
+        $this->syncUserSummary($subscription->user()->firstOrFail());
 
         return $subscription->fresh();
     }
 
-    private function refreshUserSummary(User $user): void
+    public function syncUserSummary(User $user): void
     {
-        Log::info('8. Atualizando resumo da assinatura do usuario em SubscriptionManager@refreshUserSummary', [
+        Log::info('8. Atualizando resumo da assinatura do usuario em SubscriptionManager@syncUserSummary', [
             'user_id' => $user->id,
         ]);
 
         $current = $this->currentSubscriptionQuery($user)->first();
 
-        if (!$current) {
+        if (! $current) {
             $user->forceFill([
                 'subscription_provider' => null,
                 'subscription_plan' => null,
@@ -761,7 +805,7 @@ class SubscriptionManager
             ];
         }
 
-        if (!preg_match('/^dinfy:user:(\d+):plan:([a-z0-9_-]+):/i', $externalReference, $matches)) {
+        if (! preg_match('/^dinfy:user:(\d+):plan:([a-z0-9_-]+):/i', $externalReference, $matches)) {
             return null;
         }
 
@@ -833,7 +877,7 @@ class SubscriptionManager
 
     private function parseDate(mixed $value): ?Carbon
     {
-        if (!$value) {
+        if (! $value) {
             return null;
         }
 
@@ -849,7 +893,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      * @return array{0:string,1:?Carbon,2:?Carbon}
      */
     private function resolveStandalonePaymentState(
@@ -891,7 +935,7 @@ class SubscriptionManager
         UserSubscription $subscription,
         ?Carbon $startedAt,
     ): ?Carbon {
-        if (!$startedAt || $subscription->frequency <= 0) {
+        if (! $startedAt || $subscription->frequency <= 0) {
             return null;
         }
 
@@ -905,7 +949,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function checkoutUrlFromPayload(array $payload, ?string $fallback = null): ?string
     {
@@ -914,7 +958,7 @@ class SubscriptionManager
             ?? Arr::get($payload, 'transaction_details.external_resource_url')
             ?? $fallback;
 
-        if (!is_string($resolved)) {
+        if (! is_string($resolved)) {
             return $fallback;
         }
 
@@ -933,7 +977,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function paymentApprovedAt(array $payload): ?Carbon
     {
@@ -943,7 +987,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function paymentCanceledAt(array $payload): ?Carbon
     {
@@ -975,11 +1019,7 @@ class SubscriptionManager
             'last_notified_at' => now(),
         ]);
 
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
-
-        return $subscription->fresh();
+        return $this->persistSubscription($subscription);
     }
 
     private function cancelLocalPendingCheckout(UserSubscription $subscription): UserSubscription
@@ -996,10 +1036,6 @@ class SubscriptionManager
             'last_notified_at' => now(),
         ]);
 
-        $subscription->save();
-
-        $this->refreshUserSummary($subscription->user()->firstOrFail());
-
-        return $subscription->fresh();
+        return $this->persistSubscription($subscription);
     }
 }

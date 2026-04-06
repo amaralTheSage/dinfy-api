@@ -11,7 +11,7 @@ class SubscriptionCatalog
     {
         $plans = config('subscriptions.plans', []);
 
-        if (!is_array($plans)) {
+        if (! is_array($plans)) {
             return [];
         }
 
@@ -29,7 +29,7 @@ class SubscriptionCatalog
     {
         $plan = config("subscriptions.plans.{$code}");
 
-        if (!is_array($plan)) {
+        if (! is_array($plan)) {
             return null;
         }
 
@@ -37,7 +37,7 @@ class SubscriptionCatalog
     }
 
     /**
-     * @param array<string, mixed> $plan
+     * @param  array<string, mixed>  $plan
      * @return array<string, mixed>
      */
     private function normalize(string $code, array $plan): array
@@ -51,7 +51,7 @@ class SubscriptionCatalog
             'frequency' => (int) ($plan['frequency'] ?? 1),
             'frequency_type' => (string) ($plan['frequency_type'] ?? 'months'),
             'monthly_equivalent' => round((float) ($plan['monthly_equivalent'] ?? 0), 2),
-            'checkout_mode' => (string) ($plan['checkout_mode'] ?? 'subscription_pending'),
+            'checkout_mode' => (string) ($plan['checkout_mode'] ?? 'pix'),
             'preapproval_plan_id' => $this->nullableString($plan['preapproval_plan_id'] ?? null),
         ];
     }

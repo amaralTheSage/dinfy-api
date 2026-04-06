@@ -2,35 +2,33 @@
 
 ## Current model
 
-Dinfy now uses its own subscription lifecycle and Mercado Pago only to issue PIX charges for each subscription period.
+Dinfy owns the subscription lifecycle locally.
+Mercado Pago is used only to create and update PIX charges.
 
-- The user chooses `monthly` or `yearly`.
-- The backend creates a PIX payment in Mercado Pago via `POST /v1/payments`.
-- The backend stores the subscription locally in `user_subscriptions`.
-- Each PIX charge is stored in `subscription_invoices`.
-- The Flutter app opens the Mercado Pago hosted payment page from `ticket_url`.
+- The backend creates a PIX payment through `POST /v1/payments`.
+- The subscription record lives in `user_subscriptions`.
+- Each PIX charge lives in `subscription_invoices`.
+- Webhooks sync payment status back into the local subscription.
 
-This keeps the QR code on Mercado Pago's own checkout page instead of rendering it inside Dinfy.
+Legacy Mercado Pago preapproval ids can still exist on older records, so the backend keeps compatibility for those webhook topics, but new checkouts are PIX-first.
 
 ## Required environment variables
 
 ```env
 MERCADO_PAGO_ACCESS_TOKEN=your_access_token
 MERCADO_PAGO_NOTIFICATION_URL=https://api.dinfy.app/api/mercado-pago/webhook
-DINFY_APP_SUBSCRIPTION_RETURN_URL=dinfy://subscription
 MERCADO_PAGO_MONTHLY_PRICE=19.90
 MERCADO_PAGO_YEARLY_PRICE=97.00
 ```
 
 ## Main checkout flow
 
-1. Flutter calls `POST /api/subscriptions/checkout` with the selected plan.
-2. Backend uses the authenticated user's email, creates a PIX payment in Mercado Pago and stores the local subscription.
-3. Backend returns the local subscription plus `checkout_url`, which should point to Mercado Pago's hosted page.
-4. Flutter opens `checkout_url` in the external browser.
-5. The buyer completes the payment on Mercado Pago's page, where the QR code is shown.
-6. Mercado Pago sends webhook updates to `POST /api/mercado-pago/webhook`.
-7. Backend syncs the payment, updates the subscription period and records the invoice history.
+1. Flutter calls `POST /api/subscriptions/checkout` with the selected plan and `payer_document`.
+2. Backend creates a PIX payment in Mercado Pago and stores the local subscription.
+3. Backend returns the local subscription plus the latest invoice payload.
+4. Flutter uses `subscription.latest_invoice` to show the PIX QR code or copy-and-paste code.
+5. Mercado Pago sends webhook updates to `POST /api/mercado-pago/webhook`.
+6. Backend syncs payment approval, cancellation, expiration, and invoice history.
 
 ## API contract
 
@@ -42,14 +40,15 @@ Request:
 
 ```json
 {
-  "plan": "monthly"
+  "plan": "monthly",
+  "payer_document": "12345678909"
 }
 ```
 
 Optional request fields:
 
 - `payer_email`: overrides the authenticated user's email if needed.
-- `payment_method`: only `pix` is accepted.
+- `payment_method`: legacy input, but only `pix` is accepted.
 
 Response:
 
@@ -60,7 +59,7 @@ Response:
     "plan": "monthly",
     "status": "pending",
     "provider": "pix",
-    "checkout_url": "https://www.mercadopago.com.br/payments/checkout-v1?...",
+    "checkout_url": null,
     "mercado_pago_payment_id": "123456789",
     "latest_payment_status": "pending",
     "next_payment_at": null,
@@ -80,16 +79,16 @@ Response:
 
 Important notes:
 
-- `checkout_url` is the preferred way to continue the payment flow.
-- `latest_invoice` exists for auditing and history, not for rendering your own checkout UI.
-- Card tokenization and hosted Dinfy checkout pages are no longer part of this flow.
+- `checkout_url` is nullable in the PIX-first flow and should not be required by the app.
+- `latest_invoice` is the canonical place for PIX checkout data.
+- Card tokenization and hosted Dinfy checkout pages are not part of the current flow.
 
 ### Get current subscription
 
 `GET /api/subscriptions/current?sync=1`
 
 - Returns the current local subscription or `null`.
-- With `sync=1`, the backend refreshes pending PIX payments from Mercado Pago before responding.
+- With `sync=1`, pending PIX payments are refreshed from Mercado Pago before responding.
 
 ### Cancel current subscription
 
@@ -105,17 +104,7 @@ Important notes:
 Supported topics:
 
 - `payment`
-- `subscription_preapproval`
-- `subscription_authorized_payment`
+- `subscription_preapproval` (legacy compatibility)
+- `subscription_authorized_payment` (legacy compatibility)
 
-For the current PIX-first flow, `payment` is the main topic used to confirm approval, cancellation or expiration of the charge.
-
-## Frontend requirement
-
-The Flutter app must:
-
-1. Call `POST /api/subscriptions/checkout`.
-2. Read `subscription.checkout_url`.
-3. Open that URL in the external browser.
-
-The app should not render its own PIX QR code screen for checkout.
+For the current PIX-first flow, `payment` is the main topic used to confirm approval, cancellation, or expiration of the charge.
