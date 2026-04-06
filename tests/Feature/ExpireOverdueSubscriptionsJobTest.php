@@ -55,7 +55,7 @@ it('expires overdue subscriptions when the job runs', function () {
     $futureSubscription->refresh();
     $user->refresh();
 
-    expect($overdueSubscription->status)->toBe('canceled');
+    expect($overdueSubscription->status)->toBe('expired');
     expect($overdueSubscription->latest_payment_status)->toBe('expired');
     expect($overdueSubscription->next_payment_at)->toBeNull();
 

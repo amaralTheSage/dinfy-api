@@ -26,6 +26,7 @@ class SubscriptionController extends Controller
         $subscription = $this->subscriptions->currentForUser(
             $request->user(),
             $request->boolean('sync'),
+            $request->boolean('recover_expired_checkout'),
         );
 
         return response()->json([

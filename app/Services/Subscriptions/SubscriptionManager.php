@@ -21,8 +21,9 @@ class SubscriptionManager
             when status in ('authorized', 'active') then 0
             when status = 'pending' then 1
             when status = 'paused' then 2
-            when status = 'canceled' then 3
-            else 4
+            when status = 'expired' then 3
+            when status = 'canceled' then 4
+            else 5
         end
     ";
 
@@ -47,15 +48,31 @@ class SubscriptionManager
         return $this->catalog->all();
     }
 
-    public function currentForUser(User $user, bool $sync = false): ?UserSubscription
+    public function currentForUser(
+        User $user,
+        bool $sync = false,
+        bool $recoverExpiredCheckout = false,
+    ): ?UserSubscription
     {
         $subscription = $this->currentSubscriptionQuery($user)->first();
 
-        if (! $sync || ! $subscription || ! $this->isOpenStatus($subscription->status)) {
-            return $subscription;
+        if ($subscription && $this->shouldExpireDueSubscription($subscription)) {
+            $subscription = $this->expireDueSubscription($subscription);
         }
 
-        return $this->syncCurrentSubscription($subscription) ?? $subscription->fresh();
+        if ($sync && $subscription && $this->isOpenStatus($subscription->status)) {
+            $subscription = $this->syncCurrentSubscription($subscription) ?? $subscription->fresh();
+
+            if ($subscription && $this->shouldExpireDueSubscription($subscription)) {
+                $subscription = $this->expireDueSubscription($subscription);
+            }
+        }
+
+        if ($recoverExpiredCheckout && $subscription && $subscription->status === 'expired') {
+            return $this->recoverExpiredCheckout($user, $subscription);
+        }
+
+        return $subscription;
     }
 
     public function createCheckout(
@@ -305,6 +322,89 @@ class SubscriptionManager
     private function isOpenStatus(?string $status): bool
     {
         return in_array((string) $status, self::OPEN_STATUSES, true);
+    }
+
+    private function shouldExpireDueSubscription(?UserSubscription $subscription, ?Carbon $now = null): bool
+    {
+        if (! $subscription) {
+            return false;
+        }
+
+        if (! in_array((string) $subscription->status, ['authorized', 'active'], true)) {
+            return false;
+        }
+
+        if (! $subscription->next_payment_at) {
+            return false;
+        }
+
+        $resolvedNow = $now?->copy() ?? now();
+
+        return $subscription->next_payment_at->lessThanOrEqualTo($resolvedNow);
+    }
+
+    public function expireDueSubscription(
+        UserSubscription $subscription,
+        ?Carbon $expiredAt = null,
+    ): UserSubscription {
+        $resolvedExpiredAt = $expiredAt?->copy() ?? now();
+
+        $subscription->forceFill([
+            'status' => 'expired',
+            'next_payment_at' => null,
+            'canceled_at' => null,
+            'latest_payment_status' => 'expired',
+            'latest_payment_status_detail' => 'payment_overdue',
+            'last_notified_at' => $resolvedExpiredAt,
+        ]);
+
+        return $this->persistSubscription($subscription);
+    }
+
+    private function canRecoverExpiredCheckout(UserSubscription $subscription): bool
+    {
+        return $subscription->status === 'expired'
+            && trim((string) $subscription->plan_code) !== ''
+            && trim((string) $subscription->payer_document_number) !== '';
+    }
+
+    private function recoverExpiredCheckout(
+        User $user,
+        UserSubscription $subscription,
+    ): UserSubscription {
+        if (! $this->canRecoverExpiredCheckout($subscription)) {
+            return $subscription;
+        }
+
+        try {
+            return $this->createCheckout(
+                $user,
+                (string) $subscription->plan_code,
+                $user->email,
+                (string) $subscription->payer_document_number,
+                (string) ($subscription->payer_document_type ?: 'CPF'),
+            );
+        } catch (ValidationException $exception) {
+            if ($this->currentOpenSubscription($user)) {
+                return $this->currentSubscriptionQuery($user)->first() ?? $subscription;
+            }
+
+            Log::warning('Expired subscription recovery validation failed.', [
+                'user_id' => $user->id,
+                'subscription_id' => $subscription->id,
+                'errors' => $exception->errors(),
+            ]);
+
+            return $subscription->fresh() ?? $subscription;
+        } catch (\Throwable $exception) {
+            Log::warning('Expired subscription recovery failed.', [
+                'user_id' => $user->id,
+                'subscription_id' => $subscription->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $subscription->fresh() ?? $subscription;
+        }
     }
 
     private function usesLegacyPreapproval(UserSubscription $subscription): bool

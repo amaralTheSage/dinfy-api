@@ -32,9 +32,9 @@ it('expires past due active subscriptions and updates user summary', function ()
                 ->assertExitCode(0);
 
         $subscription->refresh();
-        expect($subscription->status)->toBe('canceled');
+        expect($subscription->status)->toBe('expired');
         expect($subscription->latest_payment_status)->toBe('expired');
 
         $user->refresh();
-        expect($user->subscription_status)->toBe('canceled');
+        expect($user->subscription_status)->toBe('expired');
 });

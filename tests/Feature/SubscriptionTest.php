@@ -74,6 +74,81 @@ it('returns a null current subscription when the user has no subscription yet', 
     Http::assertNothingSent();
 });
 
+it('creates a new pending pix checkout when an expired subscription is reopened from the subscription page', function () {
+    Http::fake([
+        'https://api.mercadopago.com/v1/payments' => Http::response([
+            'id' => 'pay_recovery_123',
+            'status' => 'pending',
+            'status_detail' => 'pending_waiting_transfer',
+            'date_created' => '2026-04-06T12:00:00.000Z',
+            'date_of_expiration' => '2026-04-06T12:30:00.000Z',
+            'external_reference' => 'dinfy-u-1-p-monthly-recovery',
+            'transaction_amount' => 19.90,
+            'currency_id' => 'BRL',
+            'point_of_interaction' => [
+                'transaction_data' => [
+                    'qr_code' => '00020101021226850014br.gov.bcb.pix2563pix.example/recovery520400005303986540519.905802BR5925Gabriel6009Sao Paulo62140510recovery6304ABCD',
+                    'qr_code_base64' => 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
+                    'expiration_date' => '2026-04-06T12:30:00.000Z',
+                ],
+            ],
+        ], 201),
+    ]);
+
+    $user = User::factory()->create([
+        'email' => 'gabriel@example.com',
+    ]);
+
+    UserSubscription::query()->create([
+        'user_id' => $user->id,
+        'provider' => 'pix',
+        'plan_code' => 'monthly',
+        'status' => 'expired',
+        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-expired',
+        'mercado_pago_payment_id' => 'pay_old_123',
+        'transaction_amount' => 19.90,
+        'currency_id' => 'BRL',
+        'frequency' => 1,
+        'frequency_type' => 'months',
+        'payer_document_type' => 'CPF',
+        'payer_document_number' => '12345678909',
+        'started_at' => Carbon::parse('2026-03-01T12:00:00.000Z'),
+        'latest_payment_status' => 'expired',
+        'latest_payment_status_detail' => 'payment_overdue',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
+        '/api/subscriptions/current?sync=1&recover_expired_checkout=1',
+    );
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('subscription.status', 'pending')
+        ->assertJsonPath('subscription.plan', 'monthly')
+        ->assertJsonPath('subscription.mercado_pago_payment_id', 'pay_recovery_123')
+        ->assertJsonPath('subscription.latest_invoice.status', 'pending')
+        ->assertJsonPath(
+            'subscription.latest_invoice.qr_code',
+            '00020101021226850014br.gov.bcb.pix2563pix.example/recovery520400005303986540519.905802BR5925Gabriel6009Sao Paulo62140510recovery6304ABCD',
+        );
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        return $request->url() === 'https://api.mercadopago.com/v1/payments'
+            && $request['payment_method_id'] === 'pix'
+            && data_get($request->data(), 'payer.email') === 'gabriel@example.com'
+            && data_get($request->data(), 'payer.identification.number') === '12345678909';
+    });
+
+    expect(
+        UserSubscription::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->count()
+    )->toBe(1);
+});
+
 it('creates a monthly pix payment with qr code data', function () {
     Http::fake([
         'https://api.mercadopago.com/v1/payments' => Http::response([

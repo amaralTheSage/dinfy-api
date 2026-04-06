@@ -22,18 +22,7 @@ class ExpireOverdueSubscriptions
             ->get();
 
         foreach ($subscriptions as $subscription) {
-            $subscription->forceFill([
-                'status' => 'canceled',
-                'canceled_at' => $subscription->canceled_at ?? $resolvedNow,
-                'next_payment_at' => null,
-                'latest_payment_status' => 'expired',
-                'latest_payment_status_detail' => 'payment_overdue',
-            ])->save();
-
-            $user = $subscription->user;
-            if ($user) {
-                $this->subscriptions->syncUserSummary($user);
-            }
+            $this->subscriptions->expireDueSubscription($subscription, $resolvedNow);
         }
 
         return $subscriptions->count();
