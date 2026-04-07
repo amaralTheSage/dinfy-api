@@ -5,7 +5,6 @@ namespace App\Services\Subscriptions;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,67 +13,9 @@ use RuntimeException;
 
 class MercadoPagoSubscriptionGateway
 {
-    /**
-     * @param array<string, mixed> $plan
-     * @return array<string, mixed>
-     */
-    public function createPendingPreapproval(
-        array $plan,
-        string $externalReference,
-        string $payerEmail,
-        ?string $cardTokenId = null,
-        ?string $deviceSessionId = null,
-    ): array {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPendingPreapproval', [
-            'plan' => $plan['code'] ?? null,
-            'external_reference' => $externalReference,
-        ]);
+    private const LOCAL_CANCELED_STATUS = 'canceled';
 
-        $payload = [
-            'reason' => $plan['reason'],
-            'external_reference' => $externalReference,
-            'payer_email' => $payerEmail,
-            'auto_recurring' => [
-                'frequency' => $plan['frequency'],
-                'frequency_type' => $plan['frequency_type'],
-                'transaction_amount' => $plan['amount'],
-                'currency_id' => $plan['currency_id'],
-            ],
-            'back_url' => config('subscriptions.back_url'),
-            'status' => 'pending',
-        ];
-
-        if (!empty($cardTokenId)) {
-            $payload['card_token_id'] = $cardTokenId;
-        }
-
-        if (!empty($deviceSessionId)) {
-            $payload['device_session_id'] = $deviceSessionId;
-        }
-
-        $notificationUrl = trim((string) config('subscriptions.notification_url', ''));
-        if ($notificationUrl !== '') {
-            $payload['notification_url'] = $notificationUrl;
-        }
-
-        try {
-            return $this->request()
-                ->withHeaders([
-                    'X-Idempotency-Key' => (string) Str::uuid(),
-                ])
-                ->post('/preapproval', $payload)
-                ->throw()
-                ->json();
-        } catch (RequestException $exception) {
-            Log::error('Mercado Pago preapproval request failed.', [
-                'payload' => $payload,
-                'response_status' => $exception->response?->status(),
-                'response_body' => $exception->response?->body(),
-            ]);
-
-            throw $exception;
-        }
-    }
+    private const MERCADO_PAGO_PAYMENT_CANCELLATION_STATUS = 'cancelled';
 
     /**
      * @param array<string, mixed> $data
@@ -123,13 +64,13 @@ class MercadoPagoSubscriptionGateway
         }
 
         try {
-            return $this->request()
+            return $this->normalizePayloadStatuses($this->request()
                 ->withHeaders([
                     'X-Idempotency-Key' => (string) Str::uuid(),
                 ])
                 ->post('/v1/payments', $payload)
                 ->throw()
-                ->json();
+                ->json());
         } catch (RequestException $exception) {
             Log::error('Mercado Pago payment request failed.', [
                 'payload' => $payload,
@@ -144,68 +85,18 @@ class MercadoPagoSubscriptionGateway
     /**
      * @return array<string, mixed>
      */
-    public function fetchPreapproval(string $preapprovalId): array
-    {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchPreapproval', [
-            'preapproval_id' => $preapprovalId,
-        ]);
-
-        $searchResponse = $this->request()
-            ->get('/preapproval/search', [
-                'id' => $preapprovalId,
-            ])
-            ->throw()
-            ->json();
-
-        $result = Arr::first(Arr::get($searchResponse, 'results', []));
-        if (is_array($result)) {
-            return $result;
-        }
-
-        $directResponse = $this->request()
-            ->get('/preapproval/' . urlencode($preapprovalId))
-            ->throw()
-            ->json();
-
-        if (!is_array($directResponse)) {
-            throw new RuntimeException('Mercado Pago returned an invalid preapproval payload.');
-        }
-
-        return $directResponse;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function cancelPreapproval(string $preapprovalId): array
-    {
-        Log::info('6. Entrou em MercadoPagoSubscriptionGateway@cancelPreapproval', [
-            'preapproval_id' => $preapprovalId,
-        ]);
-
-        return $this->request()
-            ->put('/preapproval/' . urlencode($preapprovalId), [
-                'status' => 'canceled',
-            ])
-            ->throw()
-            ->json();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
     public function cancelPayment(string $paymentId): array
     {
         Log::info('6. Entrou em MercadoPagoSubscriptionGateway@cancelPayment', [
             'payment_id' => $paymentId,
         ]);
 
-        return $this->request()
+        return $this->normalizePayloadStatuses($this->request()
             ->put('/v1/payments/' . urlencode($paymentId), [
-                'status' => 'canceled',
+                'status' => self::MERCADO_PAGO_PAYMENT_CANCELLATION_STATUS,
             ])
             ->throw()
-            ->json();
+            ->json());
     }
 
     /**
@@ -217,25 +108,10 @@ class MercadoPagoSubscriptionGateway
             'payment_id' => $paymentId,
         ]);
 
-        return $this->request()
+        return $this->normalizePayloadStatuses($this->request()
             ->get('/v1/payments/' . urlencode($paymentId))
             ->throw()
-            ->json();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function fetchAuthorizedPayment(string $authorizedPaymentId): array
-    {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchAuthorizedPayment', [
-            'authorized_payment_id' => $authorizedPaymentId,
-        ]);
-
-        return $this->request()
-            ->get('/authorized_payments/' . urlencode($authorizedPaymentId))
-            ->throw()
-            ->json();
+            ->json());
     }
 
     public function hasWebhookSecret(): bool
@@ -306,5 +182,29 @@ class MercadoPagoSubscriptionGateway
             ->asJson()
             ->withToken($token)
             ->timeout(15);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePayloadStatuses(array $payload): array
+    {
+        array_walk_recursive($payload, function (mixed &$value, string|int $key): void {
+            if ($key !== 'status' || ! is_string($value)) {
+                return;
+            }
+
+            $value = $this->normalizeStatus($value);
+        });
+
+        return $payload;
+    }
+
+    private function normalizeStatus(string $status): string
+    {
+        return strtolower(trim($status)) === self::MERCADO_PAGO_PAYMENT_CANCELLATION_STATUS
+            ? self::LOCAL_CANCELED_STATUS
+            : $status;
     }
 }

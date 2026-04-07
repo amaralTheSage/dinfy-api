@@ -24,7 +24,7 @@ it('expires overdue subscriptions when the job runs', function () {
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'active',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-overdue',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-monthly-overdue',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -39,7 +39,7 @@ it('expires overdue subscriptions when the job runs', function () {
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'active',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-future',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-monthly-future',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -55,11 +55,11 @@ it('expires overdue subscriptions when the job runs', function () {
     $futureSubscription->refresh();
     $user->refresh();
 
-    expect($overdueSubscription->status)->toBe('expired');
+    expect($overdueSubscription->status->value)->toBe('expired');
     expect($overdueSubscription->latest_payment_status)->toBe('expired');
     expect($overdueSubscription->next_payment_at)->toBeNull();
 
-    expect($futureSubscription->status)->toBe('active');
+    expect($futureSubscription->status->value)->toBe('active');
     expect($futureSubscription->next_payment_at)->not()->toBeNull();
 
     expect($user->subscription_status)->toBe('active');

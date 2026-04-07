@@ -51,15 +51,6 @@ class SubscriptionCatalog
             'frequency' => (int) ($plan['frequency'] ?? 1),
             'frequency_type' => (string) ($plan['frequency_type'] ?? 'months'),
             'monthly_equivalent' => round((float) ($plan['monthly_equivalent'] ?? 0), 2),
-            'checkout_mode' => (string) ($plan['checkout_mode'] ?? 'pix'),
-            'preapproval_plan_id' => $this->nullableString($plan['preapproval_plan_id'] ?? null),
         ];
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        $resolved = trim((string) $value);
-
-        return $resolved !== '' ? $resolved : null;
     }
 }

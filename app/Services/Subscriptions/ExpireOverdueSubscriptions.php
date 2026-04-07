@@ -2,6 +2,7 @@
 
 namespace App\Services\Subscriptions;
 
+use App\Enums\SubscriptionStatus;
 use App\Models\UserSubscription;
 use Illuminate\Support\Carbon;
 
@@ -16,7 +17,7 @@ class ExpireOverdueSubscriptions
         $resolvedNow = $now?->copy() ?? now();
 
         $subscriptions = UserSubscription::query()
-            ->whereIn('status', ['authorized', 'active'])
+            ->where('status', SubscriptionStatus::Active->value)
             ->whereNotNull('next_payment_at')
             ->where('next_payment_at', '<=', $resolvedNow)
             ->get();

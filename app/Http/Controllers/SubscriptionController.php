@@ -7,6 +7,7 @@ use App\Services\Subscriptions\SubscriptionManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SubscriptionController extends Controller
 {
@@ -41,11 +42,10 @@ class SubscriptionController extends Controller
         try {
             $validated = $request->validate([
                 'plan' => ['required', 'string', Rule::in(array_keys(config('subscriptions.plans', [])))],
-                'payment_method' => ['nullable', Rule::in(['pix'])],
                 'payer_email' => ['nullable', 'email:rfc'],
                 'payer_document' => ['required', 'string', 'max:30'],
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             Log::warning('2. Falha na validação em SubscriptionController@checkout', [
                 'errors' => $e->errors(),
             ]);
@@ -55,7 +55,6 @@ class SubscriptionController extends Controller
 
         Log::info('2. Validação concluida em SubscriptionController@checkout', [
             'plan' => $validated['plan'],
-            'payment_method' => $validated['payment_method'] ?? 'pix',
         ]);
 
         $subscription = $this->subscriptions->createCheckout(
@@ -68,7 +67,7 @@ class SubscriptionController extends Controller
         Log::info('9. SubscriptionController@checkout finalizado com sucesso', [
             'subscription_id' => $subscription->id,
             'plan' => $validated['plan'],
-            'status' => $subscription->status,
+            'status' => $subscription->status->value,
         ]);
 
         return response()->json([
@@ -84,7 +83,7 @@ class SubscriptionController extends Controller
 
         Log::info('9. SubscriptionController@cancel finalizado com sucesso', [
             'subscription_id' => $subscription->id,
-            'status' => $subscription->status,
+            'status' => $subscription->status->value,
         ]);
 
         return response()->json([
@@ -102,19 +101,17 @@ class SubscriptionController extends Controller
         return [
             'id' => $subscription->id,
             'plan' => $subscription->plan_code,
-            'status' => $subscription->status,
+            'status' => $subscription->status->value,
             'provider' => $subscription->provider,
             'amount' => (float) $subscription->transaction_amount,
             'currency_id' => $subscription->currency_id,
             'frequency' => $subscription->frequency,
             'frequency_type' => $subscription->frequency_type,
-            'checkout_url' => $subscription->checkout_url,
-            'sandbox_checkout_url' => $subscription->sandbox_checkout_url,
-            'mercado_pago_preapproval_id' => $subscription->mercado_pago_preapproval_id,
             'mercado_pago_payment_id' => $subscription->mercado_pago_payment_id,
             'external_reference' => $subscription->external_reference,
             'latest_payment_status' => $subscription->latest_payment_status,
             'latest_payment_status_detail' => $subscription->latest_payment_status_detail,
+            'recovered_from_expired' => (bool) $subscription->getAttribute('recovered_from_expired'),
             'started_at' => $subscription->started_at?->toIso8601String(),
             'next_payment_at' => $subscription->next_payment_at?->toIso8601String(),
             'canceled_at' => $subscription->canceled_at?->toIso8601String(),

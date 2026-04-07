@@ -77,10 +77,6 @@ class ExpiringSubscriptionDemoSeeder extends Seeder
             'started_at' => $startedAt,
             'next_payment_at' => $renewsAt,
             'last_notified_at' => $now,
-            'raw_payload' => [
-                'seeded_by' => static::class,
-                'seeded_at' => $now->toIso8601String(),
-            ],
             'latest_payment_payload' => [
                 'id' => $paymentId,
                 'status' => 'approved',

@@ -10,8 +10,6 @@ Mercado Pago is used only to create and update PIX charges.
 - Each PIX charge lives in `subscription_invoices`.
 - Webhooks sync payment status back into the local subscription.
 
-Legacy Mercado Pago preapproval ids can still exist on older records, so the backend keeps compatibility for those webhook topics, but new checkouts are PIX-first.
-
 ## Required environment variables
 
 ```env
@@ -48,7 +46,6 @@ Request:
 Optional request fields:
 
 - `payer_email`: overrides the authenticated user's email if needed.
-- `payment_method`: legacy input, but only `pix` is accepted.
 
 Response:
 
@@ -59,7 +56,6 @@ Response:
     "plan": "monthly",
     "status": "pending",
     "provider": "pix",
-    "checkout_url": null,
     "mercado_pago_payment_id": "123456789",
     "latest_payment_status": "pending",
     "next_payment_at": null,
@@ -79,9 +75,8 @@ Response:
 
 Important notes:
 
-- `checkout_url` is nullable in the PIX-first flow and should not be required by the app.
 - `latest_invoice` is the canonical place for PIX checkout data.
-- Card tokenization and hosted Dinfy checkout pages are not part of the current flow.
+- Hosted checkout URLs and preapproval subscriptions are not part of the current flow.
 
 ### Get current subscription
 
@@ -104,7 +99,5 @@ Important notes:
 Supported topics:
 
 - `payment`
-- `subscription_preapproval` (legacy compatibility)
-- `subscription_authorized_payment` (legacy compatibility)
 
-For the current PIX-first flow, `payment` is the main topic used to confirm approval, cancellation, or expiration of the charge.
+For the current PIX-first flow, `payment` is the topic used to confirm approval, cancellation, or expiration of the charge.

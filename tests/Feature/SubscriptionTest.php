@@ -16,7 +16,6 @@ beforeEach(function (): void {
     config()->set('services.mercadopago.access_token', 'test-token');
     config()->set('services.mercadopago.public_key', 'test-public-key');
     config()->set('services.mercadopago.webhook_secret', '');
-    config()->set('subscriptions.back_url', 'https://dinfy.app/assinatura');
     config()->set('subscriptions.notification_url', 'https://api.dinfy.app/api/mercado-pago/webhook');
     config()->set('subscriptions.plans', [
         'monthly' => [
@@ -27,7 +26,6 @@ beforeEach(function (): void {
             'frequency' => 1,
             'frequency_type' => 'months',
             'monthly_equivalent' => 19.90,
-            'checkout_mode' => 'pix',
         ],
         'yearly' => [
             'name' => 'Anual',
@@ -37,7 +35,6 @@ beforeEach(function (): void {
             'frequency' => 12,
             'frequency_type' => 'months',
             'monthly_equivalent' => round(97.00 / 12, 2),
-            'checkout_mode' => 'pix',
         ],
     ]);
 });
@@ -104,7 +101,7 @@ it('creates a new pending pix checkout when an expired subscription is reopened 
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'expired',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-expired',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-monthly-expired',
         'mercado_pago_payment_id' => 'pay_old_123',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
@@ -127,6 +124,7 @@ it('creates a new pending pix checkout when an expired subscription is reopened 
         ->assertOk()
         ->assertJsonPath('subscription.status', 'pending')
         ->assertJsonPath('subscription.plan', 'monthly')
+        ->assertJsonPath('subscription.recovered_from_expired', true)
         ->assertJsonPath('subscription.mercado_pago_payment_id', 'pay_recovery_123')
         ->assertJsonPath('subscription.latest_invoice.status', 'pending')
         ->assertJsonPath(
@@ -186,8 +184,6 @@ it('creates a monthly pix payment with qr code data', function () {
         ->assertJsonPath('subscription.plan', 'monthly')
         ->assertJsonPath('subscription.provider', 'pix')
         ->assertJsonPath('subscription.status', 'pending')
-        ->assertJsonPath('subscription.checkout_url', null)
-        ->assertJsonPath('subscription.mercado_pago_preapproval_id', null)
         ->assertJsonPath('subscription.mercado_pago_payment_id', 'pay_pix_123')
         ->assertJsonPath('subscription.latest_invoice.qr_code', '00020101021226850014br.gov.bcb.pix2563pix.example/abc520400005303986540519.905802BR5925Gabriel6009Sao Paulo62140510abc1236304ABCD')
         ->assertJsonPath('subscription.latest_invoice.qr_code_base64', 'iVBORw0KGgoAAAANSUhEUgAAAAUA');
@@ -210,7 +206,6 @@ it('creates a monthly pix payment with qr code data', function () {
         'mercado_pago_payment_id' => 'pay_pix_123',
         'payer_document_type' => 'CPF',
         'payer_document_number' => '12345678909',
-        'checkout_url' => null,
     ]);
 
     $this->assertDatabaseHas('subscription_invoices', [
@@ -218,26 +213,6 @@ it('creates a monthly pix payment with qr code data', function () {
         'provider_payment_id' => 'pay_pix_123',
         'status' => 'pending',
     ]);
-});
-
-it('rejects card as a checkout payment method', function () {
-    Http::fake();
-
-    $user = User::factory()->create();
-
-    Sanctum::actingAs($user);
-
-    $response = $this->postJson('/api/subscriptions/checkout', [
-        'plan' => 'monthly',
-        'payment_method' => 'card',
-        'payer_document' => '12345678909',
-    ]);
-
-    $response
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('payment_method');
-
-    Http::assertNothingSent();
 });
 
 it('prevents creating a second subscription while one is still open', function () {
@@ -250,14 +225,13 @@ it('prevents creating a second subscription while one is still open', function (
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'pending',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-existing',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-monthly-existing',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
         'frequency_type' => 'months',
         'mercado_pago_payment_id' => 'pay_existing_123',
         'latest_payment_status' => 'pending',
-        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_existing_123',
     ]);
 
     Sanctum::actingAs($user);
@@ -279,7 +253,7 @@ it('cancels a pending pix payment through mercado pago', function () {
         'https://api.mercadopago.com/v1/payments/pay_pending_123' => Http::response([
             'id' => 'pay_pending_123',
             'external_reference' => 'dinfy-u-1-p-yearly-123',
-            'status' => 'canceled',
+            'status' => 'cancelled',
             'status_detail' => 'by_payer',
             'date_last_updated' => '2026-03-31T14:00:00.000Z',
         ], 200),
@@ -292,14 +266,13 @@ it('cancels a pending pix payment through mercado pago', function () {
         'provider' => 'pix',
         'plan_code' => 'yearly',
         'status' => 'pending',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-yearly-123',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-yearly-123',
         'mercado_pago_payment_id' => 'pay_pending_123',
         'transaction_amount' => 97.00,
         'currency_id' => 'BRL',
         'frequency' => 12,
         'frequency_type' => 'months',
         'latest_payment_status' => 'pending',
-        'checkout_url' => 'https://www.mercadopago.com.br/payments/checkout-v1?payment_id=pay_pending_123',
     ]);
 
     SubscriptionInvoice::query()->create([
@@ -319,21 +292,19 @@ it('cancels a pending pix payment through mercado pago', function () {
     $response
         ->assertOk()
         ->assertJsonPath('subscription.status', 'canceled')
-        ->assertJsonPath('subscription.latest_payment_status', 'canceled')
-        ->assertJsonPath('subscription.checkout_url', null);
+        ->assertJsonPath('subscription.latest_payment_status', 'canceled');
 
     Http::assertSent(function (HttpRequest $request): bool {
         return $request->url() === 'https://api.mercadopago.com/v1/payments/pay_pending_123'
             && $request->method() === 'PUT'
-            && $request['status'] === 'canceled';
+            && $request['status'] === 'cancelled';
     });
 
     $subscription->refresh();
     $user->refresh();
 
-    expect($subscription->status)->toBe('canceled');
+    expect($subscription->status->value)->toBe('canceled');
     expect($subscription->latest_payment_status)->toBe('canceled');
-    expect($subscription->checkout_url)->toBeNull();
     expect($user->subscription_status)->toBe('canceled');
 });
 
@@ -347,7 +318,7 @@ it('cancels an active local pix subscription without calling mercado pago', func
         'provider' => 'pix',
         'plan_code' => 'monthly',
         'status' => 'active',
-        'external_reference' => 'dinfy-u-' . $user->id . '-p-monthly-active',
+        'external_reference' => 'dinfy-u-'.$user->id.'-p-monthly-active',
         'transaction_amount' => 19.90,
         'currency_id' => 'BRL',
         'frequency' => 1,
@@ -364,7 +335,6 @@ it('cancels an active local pix subscription without calling mercado pago', func
     $response
         ->assertOk()
         ->assertJsonPath('subscription.status', 'canceled')
-        ->assertJsonPath('subscription.checkout_url', null)
         ->assertJsonPath('subscription.next_payment_at', null);
 
     Http::assertNothingSent();
@@ -372,14 +342,14 @@ it('cancels an active local pix subscription without calling mercado pago', func
     $subscription->refresh();
     $user->refresh();
 
-    expect($subscription->status)->toBe('canceled');
+    expect($subscription->status->value)->toBe('canceled');
     expect($subscription->next_payment_at)->toBeNull();
     expect($user->subscription_status)->toBe('canceled');
 });
 
 it('syncs approved payments using mercado pago timestamps and preserves invoice history', function () {
     $user = User::factory()->create();
-    $externalReference = 'dinfy-u-' . $user->id . '-p-monthly-renewal';
+    $externalReference = 'dinfy-u-'.$user->id.'-p-monthly-renewal';
 
     Http::fake([
         'https://api.mercadopago.com/v1/payments/pay_renewal_456' => Http::response([
@@ -440,11 +410,10 @@ it('syncs approved payments using mercado pago timestamps and preserves invoice 
     $subscription->refresh();
     $user->refresh();
 
-    expect($subscription->status)->toBe('active');
+    expect($subscription->status->value)->toBe('active');
     expect($subscription->mercado_pago_payment_id)->toBe('pay_renewal_456');
     expect($subscription->started_at?->toIso8601String())->toStartWith('2026-04-01T15:00:00');
     expect($subscription->next_payment_at?->toIso8601String())->toStartWith('2026-05-01T15:00:00');
-    expect($subscription->checkout_url)->toBeNull();
     expect($user->subscription_status)->toBe('active');
 
     expect(
@@ -466,10 +435,10 @@ it('rejects webhook requests with an invalid signature when a secret is configur
 
     Http::fake();
 
-    $response = $this->postJson('/api/mercado-pago/webhook?data.id=preapp_123', [
-        'type' => 'subscription_preapproval',
+    $response = $this->postJson('/api/mercado-pago/webhook?data.id=pay_123', [
+        'type' => 'payment',
         'data' => [
-            'id' => 'preapp_123',
+            'id' => 'pay_123',
         ],
     ], [
         'x-signature' => 'ts=1704908010,v1=invalid',

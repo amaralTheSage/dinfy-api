@@ -30,7 +30,7 @@ it('seeds the demo user with an active subscription that renews in one minute', 
         ->first();
 
     expect($subscription)->not()->toBeNull();
-    expect($subscription?->status)->toBe('active');
+    expect($subscription?->status?->value)->toBe('active');
     expect($subscription?->plan_code)->toBe('monthly');
     expect($subscription?->latest_payment_status)->toBe('approved');
     expect($subscription?->next_payment_at?->toIso8601String())

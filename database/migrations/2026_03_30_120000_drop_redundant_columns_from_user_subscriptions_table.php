@@ -11,11 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('user_subscriptions', function (Blueprint $table) {
-            $table->dropColumn([
-                'plan_name',
-                'reason',
-            ]);
+        $columns = array_values(array_filter([
+            Schema::hasColumn('user_subscriptions', 'plan_name') ? 'plan_name' : null,
+            Schema::hasColumn('user_subscriptions', 'reason') ? 'reason' : null,
+        ]));
+
+        if ($columns === []) {
+            return;
+        }
+
+        Schema::table('user_subscriptions', function (Blueprint $table) use ($columns) {
+            $table->dropColumn($columns);
         });
     }
 

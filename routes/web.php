@@ -11,7 +11,7 @@ Route::get('/check', function (SubscriptionCatalog $catalog) {
         'notes' => [
             'Create subscriptions through POST /api/subscriptions/checkout.',
             'New checkouts are PIX-first and return the local subscription plus the latest PIX invoice data.',
-            'Legacy Mercado Pago preapproval ids may still appear on older records and webhooks.',
+            'Mercado Pago webhooks should use the payment topic to reconcile PIX charges.',
         ],
     ]);
 });
