@@ -491,14 +491,18 @@ class SubscriptionManager
     {
         Log::info('2. Entrou em SubscriptionManager@handleWebhook');
 
-        if ($this->mercadoPago->hasWebhookSecret() && ! $this->mercadoPago->isValidWebhookSignature($request)) {
+        if (
+            $this->mercadoPago->hasWebhookSecret()
+            && $this->shouldValidateWebhookSignature($request)
+            && ! $this->mercadoPago->isValidWebhookSignature($request)
+        ) {
             Log::warning('3. Assinatura do webhook invalida em SubscriptionManager@handleWebhook');
 
             abort(401, 'Invalid Mercado Pago signature.');
         }
 
-        $type = strtolower((string) ($request->input('type') ?? $request->input('topic') ?? ''));
-        $resourceId = (string) ($request->query('data.id') ?? data_get($request->all(), 'data.id', ''));
+        $type = $this->resolveWebhookType($request);
+        $resourceId = $this->resolveWebhookResourceId($request);
 
         match ($type) {
             'payment' => $resourceId !== '' ? $this->syncPayment($resourceId) : null,
@@ -507,6 +511,85 @@ class SubscriptionManager
                 'resource_id' => $resourceId,
             ]),
         };
+    }
+
+    private function shouldValidateWebhookSignature(Request $request): bool
+    {
+        $hasWebhookDataId = $this->normalizeWebhookResourceId(
+            $request->query('data.id') ?? data_get($request->all(), 'data.id'),
+        ) !== '';
+
+        if ($hasWebhookDataId) {
+            return true;
+        }
+
+        $hasIpnTopic = trim((string) ($request->query('topic') ?? $request->input('topic') ?? '')) !== '';
+        $hasIpnResourceId = $this->normalizeWebhookResourceId(
+            $request->query('id')
+            ?? $request->input('id')
+            ?? $request->input('resource'),
+        ) !== '';
+
+        if ($hasIpnTopic && $hasIpnResourceId) {
+            Log::info('Mercado Pago IPN received; skipping webhook signature validation.', [
+                'topic' => $request->query('topic') ?? $request->input('topic'),
+                'resource_id' => $request->query('id') ?? $request->input('id') ?? $request->input('resource'),
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function resolveWebhookType(Request $request): string
+    {
+        return strtolower(trim((string) (
+            $request->input('type')
+            ?? $request->query('type')
+            ?? $request->input('topic')
+            ?? $request->query('topic')
+            ?? ''
+        )));
+    }
+
+    private function resolveWebhookResourceId(Request $request): string
+    {
+        $candidates = [
+            $request->query('data.id'),
+            data_get($request->all(), 'data.id'),
+            $request->query('id'),
+            $request->input('id'),
+            $request->input('resource'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $resolved = $this->normalizeWebhookResourceId($candidate);
+
+            if ($resolved !== '') {
+                return $resolved;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeWebhookResourceId(mixed $value): string
+    {
+        $resolved = trim((string) $value);
+
+        if ($resolved === '') {
+            return '';
+        }
+
+        if (filter_var($resolved, FILTER_VALIDATE_URL)) {
+            $path = (string) parse_url($resolved, PHP_URL_PATH);
+            $lastSegment = trim((string) basename($path));
+
+            return $lastSegment !== '' ? $lastSegment : $resolved;
+        }
+
+        return $resolved;
     }
 
     public function syncPayment(string $paymentId): ?UserSubscription

@@ -454,6 +454,75 @@ it('syncs approved payments using mercado pago timestamps and preserves invoice 
     expect($renewalInvoice?->paid_at?->toIso8601String())->toStartWith('2026-04-01T15:00:00');
 });
 
+it('syncs payment notifications sent in mercado pago ipn format', function () {
+    config()->set('services.mercadopago.webhook_secret', 'super-secret');
+
+    $user = User::factory()->create();
+    $paymentId = '152920155313';
+    $externalReference = 'dinfy-u-'.$user->id.'-p-monthly-ipn';
+
+    Http::fake([
+        'https://api.mercadopago.com/v1/payments/'.$paymentId => Http::response([
+            'id' => $paymentId,
+            'external_reference' => $externalReference,
+            'status' => 'approved',
+            'status_detail' => 'accredited',
+            'transaction_amount' => 19.90,
+            'currency_id' => 'BRL',
+            'date_approved' => '2026-04-07T19:32:20.000Z',
+            'date_last_updated' => '2026-04-07T19:32:20.000Z',
+        ], 200),
+    ]);
+
+    $subscription = UserSubscription::query()->create([
+        'user_id' => $user->id,
+        'provider' => 'pix',
+        'plan_code' => 'monthly',
+        'status' => 'pending',
+        'external_reference' => $externalReference,
+        'mercado_pago_payment_id' => $paymentId,
+        'transaction_amount' => 19.90,
+        'currency_id' => 'BRL',
+        'frequency' => 1,
+        'frequency_type' => 'months',
+        'latest_payment_status' => 'pending',
+    ]);
+
+    SubscriptionInvoice::query()->create([
+        'user_subscription_id' => $subscription->id,
+        'provider' => 'mercado_pago',
+        'provider_payment_id' => $paymentId,
+        'external_reference' => $externalReference,
+        'transaction_amount' => 19.90,
+        'currency_id' => 'BRL',
+        'status' => 'pending',
+    ]);
+
+    $response = $this->postJson('/api/mercado-pago/webhook?id='.$paymentId.'&topic=payment', [
+        'resource' => $paymentId,
+        'topic' => 'payment',
+    ], [
+        'x-signature' => 'ts=1775579222,v1=not-used-for-ipn',
+        'x-request-id' => '01ce9067-7062-48f8-a36e-b733005d7825',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('ok', true);
+
+    $subscription->refresh();
+    $user->refresh();
+
+    expect($subscription->status->value)->toBe('active');
+    expect($subscription->latest_payment_status)->toBe('approved');
+    expect($user->subscription_status)->toBe('active');
+
+    Http::assertSent(function (HttpRequest $request) use ($paymentId): bool {
+        return $request->url() === 'https://api.mercadopago.com/v1/payments/'.$paymentId
+            && $request->method() === 'GET';
+    });
+});
+
 it('rejects webhook requests with an invalid signature when a secret is configured', function () {
     config()->set('services.mercadopago.webhook_secret', 'super-secret');
 
