@@ -168,7 +168,6 @@ class SubscriptionManager
                 'qr_code' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code'),
                 'qr_code_base64' => (string) Arr::get($payment, 'point_of_interaction.transaction_data.qr_code_base64'),
                 'qr_code_expires_at' => $this->parseDate(Arr::get($payment, 'point_of_interaction.transaction_data.expiration_date')),
-                'raw_payload' => $payment,
             ]);
 
             return $subscription;
@@ -298,15 +297,15 @@ class SubscriptionManager
             $resolvedType = 'CPF';
         }
 
-        $expectedLength = match ($resolvedType) {
-            'CPF' => 11,
-            'CNPJ' => 14,
-            default => null,
-        };
+        if (! $this->isValidPayerDocument($resolvedType, $normalizedNumber)) {
+            $documentLabel = match ($resolvedType) {
+                'CNPJ' => 'CNPJ',
+                'CPF' => 'CPF',
+                default => 'documento',
+            };
 
-        if ($normalizedNumber === '' || ($expectedLength !== null && strlen($normalizedNumber) !== $expectedLength)) {
             throw ValidationException::withMessages([
-                'payer_document' => ['Informe um CPF valido para gerar o pagamento PIX.'],
+                'payer_document' => ["Informe um {$documentLabel} valido para gerar o pagamento PIX."],
             ]);
         }
 
@@ -314,6 +313,71 @@ class SubscriptionManager
             'type' => $resolvedType,
             'number' => $normalizedNumber,
         ];
+    }
+
+    private function isValidPayerDocument(string $documentType, string $documentNumber): bool
+    {
+        return match ($documentType) {
+            'CPF' => $this->isValidCpf($documentNumber),
+            'CNPJ' => $this->isValidCnpj($documentNumber),
+            default => false,
+        };
+    }
+
+    private function isValidCpf(string $cpf): bool
+    {
+        if (strlen($cpf) !== 11 || preg_match('/^(\d)\1{10}$/', $cpf) === 1) {
+            return false;
+        }
+
+        for ($checkDigitIndex = 9; $checkDigitIndex < 11; $checkDigitIndex++) {
+            $sum = 0;
+
+            for ($digitIndex = 0; $digitIndex < $checkDigitIndex; $digitIndex++) {
+                $sum += ((int) $cpf[$digitIndex]) * (($checkDigitIndex + 1) - $digitIndex);
+            }
+
+            $remainder = ($sum * 10) % 11;
+            $expectedDigit = $remainder === 10 ? 0 : $remainder;
+
+            if ((int) $cpf[$checkDigitIndex] !== $expectedDigit) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isValidCnpj(string $cnpj): bool
+    {
+        if (strlen($cnpj) !== 14 || preg_match('/^(\d)\1{13}$/', $cnpj) === 1) {
+            return false;
+        }
+
+        $firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        $secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+        $firstDigit = $this->calculateCnpjCheckDigit($cnpj, $firstWeights);
+        $secondDigit = $this->calculateCnpjCheckDigit($cnpj, $secondWeights);
+
+        return (int) $cnpj[12] === $firstDigit
+            && (int) $cnpj[13] === $secondDigit;
+    }
+
+    /**
+     * @param array<int, int> $weights
+     */
+    private function calculateCnpjCheckDigit(string $cnpj, array $weights): int
+    {
+        $sum = 0;
+
+        foreach ($weights as $index => $weight) {
+            $sum += ((int) $cnpj[$index]) * $weight;
+        }
+
+        $remainder = $sum % 11;
+
+        return $remainder < 2 ? 0 : 11 - $remainder;
     }
 
     private function shouldExpireDueSubscription(?UserSubscription $subscription, ?Carbon $now = null): bool
@@ -488,7 +552,6 @@ class SubscriptionManager
                 'currency_id' => (string) Arr::get($payload, 'currency_id', $subscription->currency_id),
                 'status' => (string) Arr::get($payload, 'status', 'pending'),
                 'status_detail' => (string) Arr::get($payload, 'status_detail'),
-                'raw_payload' => $payload,
             ]);
         }
 
@@ -514,7 +577,6 @@ class SubscriptionManager
             'qr_code' => Arr::get($payload, 'point_of_interaction.transaction_data.qr_code', $invoice->qr_code),
             'qr_code_base64' => Arr::get($payload, 'point_of_interaction.transaction_data.qr_code_base64', $invoice->qr_code_base64),
             'qr_code_expires_at' => $this->parseDate(Arr::get($payload, 'point_of_interaction.transaction_data.expiration_date')) ?? $invoice->qr_code_expires_at,
-            'raw_payload' => $payload,
         ])->save();
     }
 
@@ -609,13 +671,10 @@ class SubscriptionManager
             'mercado_pago_payment_id' => $paymentId !== '' ? $paymentId : $subscription->mercado_pago_payment_id,
             'latest_payment_status' => $paymentStatus !== '' ? $paymentStatus : $subscription->latest_payment_status,
             'latest_payment_status_detail' => $paymentStatusDetail !== '' ? $paymentStatusDetail : $subscription->latest_payment_status_detail,
-            'payer_document_type' => Arr::get($payload, 'payer.identification.type', $subscription->payer_document_type),
-            'payer_document_number' => Arr::get($payload, 'payer.identification.number', $subscription->payer_document_number),
             'started_at' => $startedAt,
             'next_payment_at' => $nextPaymentAt,
             'canceled_at' => $canceledAt,
             'last_notified_at' => now(),
-            'latest_payment_payload' => $payload,
         ]);
 
         Log::info('9. Payload de pagamento aplicado em SubscriptionManager@applyPaymentPayload', [

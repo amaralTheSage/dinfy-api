@@ -22,7 +22,6 @@ class SubscriptionInvoice extends Model
                 'qr_code',
                 'qr_code_base64',
                 'qr_code_expires_at',
-                'raw_payload',
         ];
 
         protected $casts = [
@@ -31,7 +30,6 @@ class SubscriptionInvoice extends Model
                 'paid_at' => 'datetime',
                 'canceled_at' => 'datetime',
                 'qr_code_expires_at' => 'datetime',
-                'raw_payload' => 'array',
         ];
 
         public function subscription(): BelongsTo

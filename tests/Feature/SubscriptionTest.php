@@ -215,6 +215,27 @@ it('creates a monthly pix payment with qr code data', function () {
     ]);
 });
 
+it('rejects an invalid cpf when creating a pix payment', function () {
+    Http::fake();
+
+    $user = User::factory()->create([
+        'email' => 'gabriel@example.com',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/subscriptions/checkout', [
+        'plan' => 'monthly',
+        'payer_document' => '99999999999',
+    ]);
+
+    $response
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('payer_document');
+
+    Http::assertNothingSent();
+});
+
 it('prevents creating a second subscription while one is still open', function () {
     Http::fake();
 
@@ -380,6 +401,8 @@ it('syncs approved payments using mercado pago timestamps and preserves invoice 
         'currency_id' => 'BRL',
         'frequency' => 1,
         'frequency_type' => 'months',
+        'payer_document_type' => 'CPF',
+        'payer_document_number' => '12345678909',
         'started_at' => Carbon::parse('2026-03-01T12:00:00.000Z'),
         'next_payment_at' => Carbon::parse('2026-04-01T12:00:00.000Z'),
         'latest_payment_status' => 'approved',
@@ -412,6 +435,7 @@ it('syncs approved payments using mercado pago timestamps and preserves invoice 
 
     expect($subscription->status->value)->toBe('active');
     expect($subscription->mercado_pago_payment_id)->toBe('pay_renewal_456');
+    expect($subscription->payer_document_number)->toBe('12345678909');
     expect($subscription->started_at?->toIso8601String())->toStartWith('2026-04-01T15:00:00');
     expect($subscription->next_payment_at?->toIso8601String())->toStartWith('2026-05-01T15:00:00');
     expect($user->subscription_status)->toBe('active');

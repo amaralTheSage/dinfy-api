@@ -77,13 +77,6 @@ class ExpiringSubscriptionDemoSeeder extends Seeder
             'started_at' => $startedAt,
             'next_payment_at' => $renewsAt,
             'last_notified_at' => $now,
-            'latest_payment_payload' => [
-                'id' => $paymentId,
-                'status' => 'approved',
-                'status_detail' => 'accredited',
-                'date_approved' => $startedAt->toIso8601String(),
-                'seeded_by' => static::class,
-            ],
         ]);
 
         SubscriptionInvoice::query()->create([
@@ -96,10 +89,6 @@ class ExpiringSubscriptionDemoSeeder extends Seeder
             'status' => 'approved',
             'status_detail' => 'accredited',
             'paid_at' => $startedAt,
-            'raw_payload' => [
-                'seeded_by' => static::class,
-                'seeded_at' => $now->toIso8601String(),
-            ],
         ]);
 
         app(SubscriptionManager::class)->syncUserSummary($user->fresh());

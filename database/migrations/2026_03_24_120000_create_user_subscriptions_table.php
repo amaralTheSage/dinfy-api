@@ -31,7 +31,6 @@ return new class extends Migration
             $table->timestamp('next_payment_at')->nullable();
             $table->timestamp('canceled_at')->nullable();
             $table->timestamp('last_notified_at')->nullable();
-            $table->json('latest_payment_payload')->nullable();
             $table->timestamps();
         });
 

@@ -24,7 +24,6 @@ return new class extends Migration
                         $table->text('qr_code')->nullable();
                         $table->text('qr_code_base64')->nullable();
                         $table->timestamp('qr_code_expires_at')->nullable();
-                        $table->json('raw_payload')->nullable();
                         $table->timestamps();
                 });
         }

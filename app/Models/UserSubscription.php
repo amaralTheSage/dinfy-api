@@ -28,7 +28,6 @@ class UserSubscription extends Model
         'next_payment_at',
         'canceled_at',
         'last_notified_at',
-        'latest_payment_payload',
     ];
 
     protected function casts(): array
@@ -41,7 +40,6 @@ class UserSubscription extends Model
             'next_payment_at' => 'datetime',
             'canceled_at' => 'datetime',
             'last_notified_at' => 'datetime',
-            'latest_payment_payload' => 'array',
         ];
     }
 
