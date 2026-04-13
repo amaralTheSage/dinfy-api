@@ -146,6 +146,54 @@ it('creates a transaction through the assistant endpoint', function () {
     ]);
 });
 
+it('creates a transaction without an account when the user has no accounts', function () {
+    $user = User::factory()->create([
+        'phone' => '5391247000',
+        'phone_normalized' => PhoneNormalizer::normalize('5391247000'),
+    ]);
+
+    $response = $this->postJson('/api/assistant/execute', [
+        'phone' => '555391247000',
+        'idempotencyKey' => 'wamid-no-account',
+        'intent' => 'create_transaction',
+        'parameters' => [
+            'type' => 'CREDIT',
+            'amount' => 43,
+            'currency' => 'BRL',
+            'description' => 'Venda de pizza',
+            'merchant' => 'Pizzaria',
+            'category' => 'Food & drink',
+            'occurredAt' => '2026-04-13T13:18:17.582Z',
+        ],
+        'metadata' => [
+            'channel' => 'whatsapp',
+            'messageId' => 'wamid-no-account',
+            'messageText' => 'Vendi pizza de 43 reais',
+        ],
+    ], [
+        'X-Assistant-Secret' => 'super-secret',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('intent', 'create_transaction')
+        ->assertJsonPath('transaction.accountId', null)
+        ->assertJsonPath('transaction.currency', 'BRL')
+        ->assertJsonPath('transaction.description', 'Venda de pizza')
+        ->assertJsonPath('replayed', false);
+
+    $this->assertDatabaseHas('financial_transactions', [
+        'user_id' => $user->id,
+        'account_id' => null,
+        'type' => 'CREDIT',
+        'amount' => '43.00',
+        'currency' => 'BRL',
+        'description' => 'Venda de pizza',
+        'merchant' => 'Pizzaria',
+        'category' => 'Food & drink',
+    ]);
+});
+
 it('replays the same assistant execution when the idempotency key repeats', function () {
     $user = User::factory()->create([
         'phone' => '11999991234',
@@ -178,11 +226,22 @@ it('replays the same assistant execution when the idempotency key repeats', func
     $firstResponse = $this->postJson('/api/assistant/execute', $payload, $headers);
     $secondResponse = $this->postJson('/api/assistant/execute', $payload, $headers);
 
-    $firstResponse->assertOk()->assertJsonPath('replayed', false);
-    $secondResponse->assertOk()->assertJsonPath('replayed', true);
+    $firstResponse
+        ->assertOk()
+        ->assertJsonPath('replayed', false)
+        ->assertJsonPath('transaction.accountId', null);
+    $secondResponse
+        ->assertOk()
+        ->assertJsonPath('replayed', true)
+        ->assertJsonPath('transaction.accountId', null);
 
     expect(FinancialTransaction::query()->count())->toBe(1);
     expect(AssistantExecution::query()->count())->toBe(1);
+    $this->assertDatabaseHas('financial_transactions', [
+        'user_id' => $user->id,
+        'account_id' => null,
+        'description' => 'Mercado',
+    ]);
 });
 
 it('returns consolidated balances through the assistant endpoint', function () {

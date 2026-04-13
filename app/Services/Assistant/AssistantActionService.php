@@ -54,12 +54,7 @@ class AssistantActionService
             'category' => ['nullable', 'string', 'max:100'],
         ])->validate();
 
-        $account = $this->resolveAccount(
-            $user,
-            $validated['accountId'] ?? null,
-            $validated['accountName'] ?? null,
-            $validated['accountLast4'] ?? null,
-        );
+        $account = $this->resolveTransactionAccount($user, $validated);
 
         $type = strtoupper((string) $validated['type']);
         $category = $this->normalizeCategory(
@@ -73,10 +68,10 @@ class AssistantActionService
 
         $transaction = new FinancialTransaction();
         $transaction->user_id = $user->id;
-        $transaction->account_id = $account->id;
+        $transaction->account_id = $account?->id;
         $transaction->type = $type;
         $transaction->amount = $validated['amount'];
-        $transaction->currency = strtoupper((string) ($validated['currency'] ?? $account->currency ?? 'BRL'));
+        $transaction->currency = strtoupper((string) ($validated['currency'] ?? $account?->currency ?? 'BRL'));
         $transaction->occurred_at = Carbon::parse($validated['occurredAt'] ?? now());
         $transaction->description = $description;
         $transaction->merchant = $merchant;
@@ -96,7 +91,7 @@ class AssistantActionService
                 '%s de %s criada%s.',
                 $type === 'CREDIT' ? 'Receita' : 'Despesa',
                 $this->formatMoney((float) $transaction->amount, $transaction->currency),
-                $account->name ? ' na conta '.$account->name : ''
+                $account?->name ? ' na conta '.$account->name : ''
             ),
             'transaction' => $this->serializeTransaction($transaction, $account),
         ];
@@ -329,6 +324,33 @@ class AssistantActionService
                 : sprintf('Foram encontradas %d transação(ões).', $transactions->count()),
             'transactions' => $transactions->map(fn (FinancialTransaction $transaction) => $this->serializeTransaction($transaction, $transaction->account))->values()->all(),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function resolveTransactionAccount(User $user, array $parameters): ?FinancialAccount
+    {
+        if ($this->hasAccountFilters($parameters)) {
+            return $this->resolveAccount(
+                $user,
+                $parameters['accountId'] ?? null,
+                $parameters['accountName'] ?? null,
+                $parameters['accountLast4'] ?? null,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function hasAccountFilters(array $parameters): bool
+    {
+        return !empty($parameters['accountId'])
+            || !empty($parameters['accountName'])
+            || !empty($parameters['accountLast4']);
     }
 
     private function resolveAccount(
