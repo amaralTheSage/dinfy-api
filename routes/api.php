@@ -40,6 +40,8 @@ Route::middleware('auth:sanctum')->group(function () {
         'index',
         'show',
         'store',
+        'update',
+        'destroy',
     ]);
     Route::apiResource('budgets', FinancialBudgetController::class);
 });

@@ -18,16 +18,14 @@ class FinancialTransactionController extends Controller
             $perPage = 200;
         }
 
-        return FinancialTransaction::query()
-            ->where('user_id', $request->user()->id)
+        return $this->transactionsQuery($request)
             ->latest('occurred_at')
             ->paginate($perPage);
     }
 
     public function show(Request $request, string $transaction)
     {
-        $model = FinancialTransaction::query()
-            ->where('user_id', $request->user()->id)
+        $model = $this->transactionsQuery($request)
             ->where('id', $transaction)
             ->firstOrFail();
 
@@ -51,10 +49,7 @@ class FinancialTransactionController extends Controller
             'data' => ['nullable', 'array'],
         ]);
 
-        $account = FinancialAccount::query()
-            ->where('user_id', $user->id)
-            ->where('id', $validated['accountId'])
-            ->firstOrFail();
+        $account = $this->resolveAccount($request, $validated['accountId']);
 
         $model = new FinancialTransaction();
         if (!empty($validated['id'])) {
@@ -74,6 +69,97 @@ class FinancialTransactionController extends Controller
 
         $model->save();
 
-        return response()->json($model, 201);
+        return response()->json(
+            $model->load('account:id,name,marketing_name,number_last4'),
+            201
+        );
+    }
+
+    public function update(Request $request, string $transaction)
+    {
+        $model = FinancialTransaction::query()
+            ->where('user_id', $request->user()->id)
+            ->where('id', $transaction)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'accountId' => ['sometimes', 'nullable', 'uuid'],
+            'type' => ['sometimes', 'required', 'string', 'max:30'],
+            'amount' => ['sometimes', 'required', 'numeric'],
+            'currency' => ['sometimes', 'nullable', 'string', 'size:3'],
+            'occurredAt' => ['sometimes', 'required', 'date'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'merchant' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'data' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        if (array_key_exists('accountId', $validated)) {
+            $accountId = $validated['accountId'];
+            $model->account_id = $accountId !== null
+                ? $this->resolveAccount($request, $accountId)?->id
+                : null;
+        }
+        if (array_key_exists('type', $validated)) {
+            $model->type = $validated['type'];
+        }
+        if (array_key_exists('amount', $validated)) {
+            $model->amount = $validated['amount'];
+        }
+        if (array_key_exists('currency', $validated)) {
+            $model->currency = $validated['currency'] ?? 'BRL';
+        }
+        if (array_key_exists('occurredAt', $validated)) {
+            $model->occurred_at = $validated['occurredAt'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $model->description = $validated['description'] ?? null;
+        }
+        if (array_key_exists('merchant', $validated)) {
+            $model->merchant = $validated['merchant'] ?? null;
+        }
+        if (array_key_exists('category', $validated)) {
+            $model->category = $validated['category'] ?? null;
+        }
+        if (array_key_exists('data', $validated)) {
+            $model->data = $validated['data'] ?? null;
+        }
+
+        $model->save();
+
+        return response()->json(
+            $model->load('account:id,name,marketing_name,number_last4')
+        );
+    }
+
+    public function destroy(Request $request, string $transaction)
+    {
+        $model = FinancialTransaction::query()
+            ->where('user_id', $request->user()->id)
+            ->where('id', $transaction)
+            ->firstOrFail();
+
+        $model->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function transactionsQuery(Request $request)
+    {
+        return FinancialTransaction::query()
+            ->with('account:id,name,marketing_name,number_last4')
+            ->where('user_id', $request->user()->id);
+    }
+
+    private function resolveAccount(Request $request, ?string $accountId): ?FinancialAccount
+    {
+        if ($accountId === null || trim($accountId) === '') {
+            return null;
+        }
+
+        return FinancialAccount::query()
+            ->where('user_id', $request->user()->id)
+            ->where('id', $accountId)
+            ->firstOrFail();
     }
 }
