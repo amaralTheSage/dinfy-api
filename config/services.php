@@ -42,4 +42,8 @@ return [
         'webhook_secret' => env('MERCADO_PAGO_WEBHOOK_SECRET'),
     ],
 
+    'n8n' => [
+        'whatsapp_opt_in_url' => env('N8N_WHATSAPP_OPT_IN_URL', 'https://n8n.dinfy.app/webhook/opt-in'),
+    ],
+
 ];

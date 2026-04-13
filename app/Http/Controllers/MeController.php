@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -49,6 +52,8 @@ class MeController extends Controller
     public function updateWhatsApp(Request $request)
     {
         $user = $request->user();
+        $wasOptedIn = $user->whatsapp_opted_in_at !== null;
+        $previousPhoneNormalized = $user->whatsapp_phone_normalized;
 
         $validated = $request->validate([
             'whatsapp_phone' => ['nullable', 'string', 'max:30'],
@@ -74,12 +79,17 @@ class MeController extends Controller
 
         $this->ensureWhatsAppPhoneIsAvailable($phoneNormalized, $user->id);
 
+        $optedInAt = $consent ? now() : null;
         $user->fill([
             'whatsapp_phone' => $phone,
             'whatsapp_phone_normalized' => $phoneNormalized,
-            'whatsapp_opted_in_at' => $consent ? now() : null,
+            'whatsapp_opted_in_at' => $optedInAt,
         ]);
         $user->save();
+
+        if ($consent && (!$wasOptedIn || $previousPhoneNormalized !== $phoneNormalized)) {
+            $this->sendWhatsAppOptInWebhook($user, $phone, $phoneNormalized, $optedInAt);
+        }
 
         return response()->json($user);
     }
@@ -163,6 +173,45 @@ class MeController extends Controller
         if ($exists) {
             throw ValidationException::withMessages([
                 'whatsapp_phone' => ['Este número de WhatsApp já está em uso.'],
+            ]);
+        }
+    }
+
+    private function sendWhatsAppOptInWebhook(
+        User $user,
+        ?string $phone,
+        ?string $phoneNormalized,
+        ?Carbon $optedInAt,
+    ): void {
+        if ($phone === null || $phoneNormalized === null || $optedInAt === null) {
+            return;
+        }
+
+        $url = trim((string) config('services.n8n.whatsapp_opt_in_url', ''));
+        if ($url === '') {
+            return;
+        }
+
+        try {
+            Http::acceptJson()
+                ->timeout(10)
+                ->post($url, [
+                    'userId' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $phone,
+                    'phoneNormalized' => $phoneNormalized,
+                    'consent' => true,
+                    'consentAt' => $optedInAt->toIso8601String(),
+                    'channel' => 'whatsapp',
+                ])
+                ->throw();
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to send WhatsApp opt-in webhook.', [
+                'user_id' => $user->id,
+                'phone_normalized' => $phoneNormalized,
+                'url' => $url,
+                'error' => $exception->getMessage(),
             ]);
         }
     }
