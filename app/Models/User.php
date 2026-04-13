@@ -27,6 +27,9 @@ class User extends Authenticatable
         'email',
         'phone',
         'phone_normalized',
+        'whatsapp_phone',
+        'whatsapp_phone_normalized',
+        'whatsapp_opted_in_at',
         'password',
     ];
 
@@ -38,6 +41,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'phone_normalized',
+        'whatsapp_phone_normalized',
         'remember_token',
     ];
 
@@ -54,6 +58,7 @@ class User extends Authenticatable
             'subscription_started_at' => 'datetime',
             'subscription_renews_at' => 'datetime',
             'subscription_canceled_at' => 'datetime',
+            'whatsapp_opted_in_at' => 'datetime',
         ];
     }
 

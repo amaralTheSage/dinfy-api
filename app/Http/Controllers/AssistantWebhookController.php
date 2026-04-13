@@ -10,6 +10,7 @@ use App\Support\PhoneNormalizer;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class AssistantWebhookController extends Controller
@@ -18,8 +19,7 @@ class AssistantWebhookController extends Controller
         private readonly AssistantUserResolver $userResolver,
         private readonly AssistantContextService $contextService,
         private readonly AssistantActionService $actionService,
-    ) {
-    }
+    ) {}
 
     public function context(Request $request)
     {
@@ -39,6 +39,7 @@ class AssistantWebhookController extends Controller
 
     public function execute(Request $request)
     {
+        Log::info('AssistantController@execute: ', [$request]);
         $validated = $request->validate([
             'phone' => ['required', 'string', 'max:40'],
             'idempotencyKey' => ['required', 'string', 'max:191'],

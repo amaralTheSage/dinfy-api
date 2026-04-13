@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/me', [MeController::class, 'update']);
+    Route::put('/me/whatsapp', [MeController::class, 'updateWhatsApp']);
     Route::post('/me/avatar', [MeController::class, 'uploadAvatar']);
     Route::delete('/me/avatar', [MeController::class, 'deleteAvatar']);
 

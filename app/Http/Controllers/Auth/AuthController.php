@@ -174,7 +174,10 @@ class AuthController extends Controller
             return;
         }
 
-        $query = User::query()->where('phone_normalized', $phoneNormalized);
+        $query = User::query()->where(function ($builder) use ($phoneNormalized): void {
+            $builder->where('phone_normalized', $phoneNormalized)
+                ->orWhere('whatsapp_phone_normalized', $phoneNormalized);
+        });
 
         if ($ignoreUserId !== null) {
             $query->whereKeyNot($ignoreUserId);

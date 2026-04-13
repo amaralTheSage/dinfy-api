@@ -46,6 +46,44 @@ class MeController extends Controller
         return response()->json($user);
     }
 
+    public function updateWhatsApp(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'whatsapp_phone' => ['nullable', 'string', 'max:30'],
+            'consent' => ['required', 'boolean'],
+        ]);
+
+        $phone = trim((string) ($validated['whatsapp_phone'] ?? ''));
+        $phone = $phone !== '' ? $phone : null;
+        $phoneNormalized = PhoneNormalizer::normalize($phone);
+        $consent = (bool) $validated['consent'];
+
+        if ($phone !== null && $phoneNormalized === null) {
+            throw ValidationException::withMessages([
+                'whatsapp_phone' => ['Informe um número de WhatsApp válido.'],
+            ]);
+        }
+
+        if ($consent && $phoneNormalized === null) {
+            throw ValidationException::withMessages([
+                'whatsapp_phone' => ['Informe um número de WhatsApp para receber mensagens.'],
+            ]);
+        }
+
+        $this->ensureWhatsAppPhoneIsAvailable($phoneNormalized, $user->id);
+
+        $user->fill([
+            'whatsapp_phone' => $phone,
+            'whatsapp_phone_normalized' => $phoneNormalized,
+            'whatsapp_opted_in_at' => $consent ? now() : null,
+        ]);
+        $user->save();
+
+        return response()->json($user);
+    }
+
     public function uploadAvatar(Request $request)
     {
         $user = $request->user();
@@ -94,13 +132,37 @@ class MeController extends Controller
         }
 
         $exists = User::query()
-            ->where('phone_normalized', $phoneNormalized)
             ->whereKeyNot($ignoreUserId)
+            ->where(function ($query) use ($phoneNormalized): void {
+                $query->where('phone_normalized', $phoneNormalized)
+                    ->orWhere('whatsapp_phone_normalized', $phoneNormalized);
+            })
             ->exists();
 
         if ($exists) {
             throw ValidationException::withMessages([
                 'phone' => ['Este telefone já está em uso.'],
+            ]);
+        }
+    }
+
+    private function ensureWhatsAppPhoneIsAvailable(?string $phoneNormalized, int $ignoreUserId): void
+    {
+        if (!$phoneNormalized) {
+            return;
+        }
+
+        $exists = User::query()
+            ->whereKeyNot($ignoreUserId)
+            ->where(function ($query) use ($phoneNormalized): void {
+                $query->where('whatsapp_phone_normalized', $phoneNormalized)
+                    ->orWhere('phone_normalized', $phoneNormalized);
+            })
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'whatsapp_phone' => ['Este número de WhatsApp já está em uso.'],
             ]);
         }
     }

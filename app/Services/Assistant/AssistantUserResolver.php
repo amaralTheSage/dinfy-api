@@ -20,7 +20,9 @@ class AssistantUserResolver
 
         $users = User::query()
             ->where(function ($query) use ($phone, $variants): void {
-                $query->where('phone', $phone)
+                $query->where('whatsapp_phone', $phone)
+                    ->orWhereIn('whatsapp_phone_normalized', $variants)
+                    ->orWhere('phone', $phone)
                     ->orWhereIn('phone_normalized', $variants);
             })
             ->limit(3)
