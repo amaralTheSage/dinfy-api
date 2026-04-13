@@ -72,6 +72,25 @@ it('returns assistant context for a whatsapp phone', function () {
         ->assertJsonPath('defaults.defaultAccountId', $account->id);
 });
 
+it('matches a brazilian mobile phone when the webhook omits the ninth digit', function () {
+    $user = User::factory()->create([
+        'name' => 'Gabriel',
+        'phone' => '(53) 98124-8282',
+        'phone_normalized' => PhoneNormalizer::normalize('(53) 98124-8282'),
+    ]);
+
+    $response = $this->postJson('/api/assistant/context', [
+        'phone' => '555381248282',
+    ], [
+        'X-Assistant-Secret' => 'super-secret',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('user.id', $user->id)
+        ->assertJsonPath('user.phone', '(53) 98124-8282');
+});
+
 it('creates a transaction through the assistant endpoint', function () {
     $user = User::factory()->create([
         'phone' => '11999991234',
