@@ -25,6 +25,8 @@ class User extends Authenticatable
         'avatar',
         'name',
         'email',
+        'email_verified_at',
+        'auth0_id',
         'phone',
         'phone_normalized',
         'whatsapp_phone',
@@ -40,6 +42,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'auth0_id',
         'phone_normalized',
         'whatsapp_phone_normalized',
         'remember_token',
