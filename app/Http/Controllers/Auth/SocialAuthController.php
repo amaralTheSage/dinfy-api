@@ -15,7 +15,7 @@ class SocialAuthController extends Controller
     public function redirect(Request $request, string $provider, SocialAuthService $socialAuth)
     {
         try {
-            $redirectUri = $socialAuth->validateRedirectUri((string) $request->query('redirect_uri', ''));
+            $redirectUri = $socialAuth->resolveRedirectUri($request->query('redirect_uri'));
             $state = $socialAuth->createAuthorizationState($provider, $redirectUri);
 
             return redirect()->away($socialAuth->authorizationUrl($provider, $state));
@@ -43,7 +43,7 @@ class SocialAuthController extends Controller
             ]));
         }
 
-        if (!$stateData) {
+        if (! $stateData) {
             return redirect()->away($socialAuth->buildFrontendRedirect($redirectUri, [
                 'provider' => $provider,
                 'error' => 'invalid_state',
@@ -97,7 +97,7 @@ class SocialAuthController extends Controller
         /** @var User|null $user */
         $user = is_numeric($userId) ? User::query()->find((int) $userId) : null;
 
-        if (!$user) {
+        if (! $user) {
             throw ValidationException::withMessages([
                 'code' => ['O codigo de login e invalido ou expirou.'],
             ]);

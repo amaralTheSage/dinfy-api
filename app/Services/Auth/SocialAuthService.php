@@ -5,30 +5,46 @@ namespace App\Services\Auth;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-use Firebase\JWT\JWT;
-use Firebase\JWT\JWK;
+use WorkOS\Exception\WorkOSException;
+use WorkOS\Resource\UserManagementAuthenticationProvider;
+use WorkOS\Resource\UserManagementAuthenticationScreenHint;
+use WorkOS\WorkOS;
 
 class SocialAuthService
 {
+    private const PROVIDER = 'workos';
+
+    public function __construct(
+        private readonly WorkOS $workos,
+    ) {}
+
     public function validateRedirectUri(string $redirectUri): string
     {
         $redirectUri = trim($redirectUri);
         $allowedRedirectUris = $this->allowedRedirectUris();
 
-        if ($redirectUri === '' || !in_array($redirectUri, $allowedRedirectUris, true)) {
+        if ($redirectUri === '' || ! in_array($redirectUri, $allowedRedirectUris, true)) {
             throw new SocialAuthException('O destino de retorno do login nao e permitido.');
         }
 
         return $redirectUri;
     }
 
+    public function resolveRedirectUri(mixed $redirectUri): string
+    {
+        $redirectUri = trim((string) $redirectUri);
+
+        if ($redirectUri === '') {
+            return $this->fallbackRedirectUri();
+        }
+
+        return $this->validateRedirectUri($redirectUri);
+    }
+
     public function createAuthorizationState(string $provider, string $redirectUri): string
     {
-        if ($provider !== 'auth0') {
-            throw new SocialAuthException('Provedor de login social invalido.');
-        }
+        $this->ensureSupportedProvider($provider);
 
         $state = Str::random(64);
 
@@ -52,7 +68,7 @@ class SocialAuthService
         }
 
         $payload = Cache::pull($this->stateCacheKey($state));
-        if (!is_array($payload) || ($payload['provider'] ?? null) !== $provider) {
+        if (! is_array($payload) || ($payload['provider'] ?? null) !== $provider) {
             return null;
         }
 
@@ -61,35 +77,29 @@ class SocialAuthService
 
     public function authorizationUrl(string $provider, string $state): string
     {
-        if ($provider !== 'auth0') {
-            throw new SocialAuthException('Provedor de login social invalido.');
-        }
+        $this->ensureSupportedProvider($provider);
 
-        return $this->auth0AuthorizationUrl($state);
+        return $this->workosAuthorizationUrl($state);
     }
 
     public function exchangeCodeForIdentity(string $provider, string $code): SocialIdentity
     {
-        if ($provider !== 'auth0') {
-            throw new SocialAuthException('Provedor de login social invalido.');
-        }
+        $this->ensureSupportedProvider($provider);
 
-        return $this->auth0IdentityFromCode($code);
+        return $this->workosIdentityFromCode($code);
     }
 
     public function resolveUser(string $provider, SocialIdentity $identity): User
     {
-        if ($provider !== 'auth0') {
-            throw new SocialAuthException('Provedor de login social invalido.');
-        }
+        $this->ensureSupportedProvider($provider);
 
         $email = Str::lower(trim($identity->email));
 
         $user = User::query()
-            ->where('auth0_id', $identity->providerId)
+            ->where('workos_user_id', $identity->providerId)
             ->first();
 
-        if (!$user) {
+        if (! $user) {
             $user = User::query()
                 ->whereRaw('LOWER(email) = ?', [$email])
                 ->first();
@@ -98,8 +108,8 @@ class SocialAuthService
         if ($user) {
             $updates = [];
 
-            if ($user->auth0_id !== $identity->providerId) {
-                $updates['auth0_id'] = $identity->providerId;
+            if ($user->workos_user_id !== $identity->providerId) {
+                $updates['workos_user_id'] = $identity->providerId;
             }
 
             if ($identity->emailVerified && $user->email_verified_at === null) {
@@ -110,7 +120,7 @@ class SocialAuthService
                 $updates['name'] = $identity->name;
             }
 
-            if (!$user->avatar && $identity->avatar) {
+            if (! $user->avatar && $identity->avatar) {
                 $updates['avatar'] = $identity->avatar;
             }
 
@@ -125,7 +135,7 @@ class SocialAuthService
         return User::create([
             'name' => trim($identity->name) !== '' ? $identity->name : Str::before($email, '@'),
             'email' => $email,
-            'auth0_id' => $identity->providerId,
+            'workos_user_id' => $identity->providerId,
             'email_verified_at' => $identity->emailVerified ? now() : null,
             'avatar' => $identity->avatar,
             'password' => Str::random(40),
@@ -134,9 +144,7 @@ class SocialAuthService
 
     public function issueExchangeCode(User $user, string $provider): string
     {
-        if ($provider !== 'auth0') {
-            throw new SocialAuthException('Provedor de login social invalido.');
-        }
+        $this->ensureSupportedProvider($provider);
 
         $code = Str::random(64);
 
@@ -181,21 +189,21 @@ class SocialAuthService
 
         if (str_contains($baseUrl, '#')) {
             [$baseUrl, $rawFragment] = explode('#', $baseUrl, 2);
-            $fragment = '#' . $rawFragment;
+            $fragment = '#'.$rawFragment;
         }
 
         $query = http_build_query(array_filter(
             $parameters,
-            static fn($value): bool => $value !== null && $value !== ''
+            static fn ($value): bool => $value !== null && $value !== ''
         ));
 
         if ($query === '') {
-            return $baseUrl . $fragment;
+            return $baseUrl.$fragment;
         }
 
         $separator = str_contains($baseUrl, '?') ? '&' : '?';
 
-        return $baseUrl . $separator . $query . $fragment;
+        return $baseUrl.$separator.$query.$fragment;
     }
 
     public function callbackUrl(string $provider): string
@@ -203,82 +211,67 @@ class SocialAuthService
         return route('auth.oauth.callback', ['provider' => $provider]);
     }
 
-    private function auth0AuthorizationUrl(string $state): string
+    private function ensureSupportedProvider(string $provider): void
     {
-        $domain = trim((string) config('services.auth0.domain', ''));
-        $clientId = trim((string) config('services.auth0.client_id', ''));
-
-        if ($domain === '' || $clientId === '') {
-            throw new SocialAuthException('O login com Auth0 nao esta configurado.');
+        if ($provider !== self::PROVIDER) {
+            throw new SocialAuthException('Provedor de login social invalido.');
         }
-
-        return $this->buildFrontendRedirect(
-            'https://' . $domain . '/authorize',
-            [
-                'client_id' => $clientId,
-                'redirect_uri' => $this->callbackUrl('auth0'),
-                'response_type' => 'code',
-                'scope' => 'openid profile email',
-                'state' => $state,
-            ]
-        );
     }
 
-    private function auth0IdentityFromCode(string $code): SocialIdentity
+    private function workosAuthorizationUrl(string $state): string
     {
-        $domain = trim((string) config('services.auth0.domain', ''));
-        $clientId = trim((string) config('services.auth0.client_id', ''));
-        $clientSecret = trim((string) config('services.auth0.client_secret', ''));
-
-        if ($domain === '' || $clientId === '' || $clientSecret === '') {
-            throw new SocialAuthException('O login com Auth0 nao esta configurado.');
+        if (! $this->hasWorkosCredentials()) {
+            throw new SocialAuthException('O login com WorkOS nao esta configurado.');
         }
 
-        // Exchange code for tokens
-        $tokenResponse = Http::asForm()
-            ->acceptJson()
-            ->post('https://' . $domain . '/oauth/token', [
-                'code' => $code,
-                'client_id' => $clientId,
-                'client_secret' => $clientSecret,
-                'redirect_uri' => $this->callbackUrl('auth0'),
-                'grant_type' => 'authorization_code',
-            ]);
-
-        if (!$tokenResponse->successful()) {
-            throw new SocialAuthException('Nao foi possivel concluir o login com Auth0.');
-        }
-
-        $idToken = trim((string) $tokenResponse->json('id_token', ''));
-        $accessToken = trim((string) $tokenResponse->json('access_token', ''));
-
-        if ($idToken === '' || $accessToken === '') {
-            throw new SocialAuthException('O Auth0 nao retornou tokens validos.');
-        }
-
-        // Decode and validate ID token
         try {
-            $decodedToken = $this->decodeAndValidateIdToken($idToken, $domain, $clientId);
-        } catch (\Exception $e) {
-            throw new SocialAuthException('Nao foi possivel validar o token do Auth0: ' . $e->getMessage());
+            return $this->workos->userManagement()->getAuthorizationUrl(
+                redirectUri: $this->callbackUrl(self::PROVIDER),
+                screenHint: UserManagementAuthenticationScreenHint::SignIn,
+                provider: UserManagementAuthenticationProvider::Authkit,
+                state: $state,
+            );
+        } catch (WorkOSException|\Throwable $exception) {
+            throw new SocialAuthException('Nao foi possivel iniciar o login com WorkOS.');
+        }
+    }
+
+    private function workosIdentityFromCode(string $code): SocialIdentity
+    {
+        if (! $this->hasWorkosCredentials()) {
+            throw new SocialAuthException('O login com WorkOS nao esta configurado.');
         }
 
-        $providerId = trim((string) ($decodedToken['sub'] ?? ''));
-        $email = Str::lower(trim((string) ($decodedToken['email'] ?? '')));
-        $name = trim((string) ($decodedToken['name'] ?? ''));
-        $picture = trim((string) ($decodedToken['picture'] ?? ''));
-        $emailVerified = filter_var($decodedToken['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        try {
+            $response = $this->workos->userManagement()->authenticateWithCode(
+                code: $code,
+                ipAddress: request()->ip(),
+                userAgent: request()->userAgent(),
+            );
+        } catch (WorkOSException|\Throwable $exception) {
+            throw new SocialAuthException('Nao foi possivel concluir o login com WorkOS.');
+        }
+
+        $user = $response->user;
+        $providerId = trim($user->id);
+        $email = Str::lower(trim($user->email));
+        $name = trim(implode(' ', array_filter([
+            trim((string) ($user->firstName ?? '')),
+            trim((string) ($user->lastName ?? '')),
+        ])));
+        $picture = trim((string) ($user->profilePictureUrl ?? ''));
+        $emailVerified = $user->emailVerified;
 
         if ($providerId === '' || $email === '') {
-            throw new SocialAuthException('Sua conta do Auth0 precisa informar um e-mail valido.');
+            throw new SocialAuthException('Sua conta do WorkOS precisa informar um e-mail valido.');
         }
 
-        if (!$emailVerified) {
-            throw new SocialAuthException('Sua conta do Auth0 precisa ter um e-mail verificado para entrar.');
+        if (! $emailVerified) {
+            throw new SocialAuthException('Sua conta do WorkOS precisa ter um e-mail verificado para entrar.');
         }
 
         return new SocialIdentity(
-            provider: 'auth0',
+            provider: self::PROVIDER,
             providerId: $providerId,
             email: $email,
             name: $name,
@@ -287,39 +280,10 @@ class SocialAuthService
         );
     }
 
-    private function decodeAndValidateIdToken(string $token, string $domain, string $clientId): array
+    private function hasWorkosCredentials(): bool
     {
-        try {
-            // Get JWKS from Auth0
-            $jwksResponse = Http::acceptJson()
-                ->get('https://' . $domain . '/.well-known/jwks.json');
-
-            if (!$jwksResponse->successful()) {
-                throw new \Exception('Could not fetch JWKS from Auth0');
-            }
-
-            $jwks = JWK::parseKeySet((array) $jwksResponse->json());
-
-            // Decode the token
-            $decoded = JWT::decode($token, $jwks, ['RS256']);
-
-            // Validate token claims
-            if (($decoded->aud ?? null) !== $clientId) {
-                throw new \Exception('Invalid audience in token');
-            }
-
-            if (($decoded->iss ?? null) !== 'https://' . $domain . '/') {
-                throw new \Exception('Invalid issuer in token');
-            }
-
-            return (array) $decoded;
-        } catch (\Firebase\JWT\ExpiredException $e) {
-            throw new \Exception('Token has expired: ' . $e->getMessage());
-        } catch (\Firebase\JWT\SignatureInvalidException $e) {
-            throw new \Exception('Invalid token signature: ' . $e->getMessage());
-        } catch (\Exception $e) {
-            throw new \Exception('Token validation failed: ' . $e->getMessage());
-        }
+        return trim((string) config('services.workos.client_id', '')) !== ''
+            && trim((string) config('services.workos.api_key', '')) !== '';
     }
 
     private function allowedRedirectUris(): array
@@ -328,7 +292,7 @@ class SocialAuthService
 
         return array_values(array_filter(
             is_array($allowedRedirectUris) ? $allowedRedirectUris : [],
-            static fn($value): bool => is_string($value) && trim($value) !== ''
+            static fn ($value): bool => is_string($value) && trim($value) !== ''
         ));
     }
 
@@ -344,11 +308,11 @@ class SocialAuthService
 
     private function stateCacheKey(string $state): string
     {
-        return 'social-oauth-state:' . $state;
+        return 'social-oauth-state:'.$state;
     }
 
     private function exchangeCodeCacheKey(string $code): string
     {
-        return 'social-oauth-exchange:' . $code;
+        return 'social-oauth-exchange:'.$code;
     }
 }

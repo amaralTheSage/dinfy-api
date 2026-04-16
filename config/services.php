@@ -28,16 +28,14 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'auth0' => [
-        'domain' => env('AUTH0_DOMAIN'),
-        'client_id' => env('AUTH0_CLIENT_ID'),
-        'client_secret' => env('AUTH0_CLIENT_SECRET'),
-        'audience' => env('AUTH0_AUDIENCE', ''),
+    'workos' => [
+        'client_id' => env('WORKOS_CLIENT_ID'),
+        'api_key' => env('WORKOS_API_KEY'),
     ],
 
     'oauth' => [
         'allowed_redirect_uris' => array_values(array_filter(array_map(
-            static fn(string $value): string => trim($value),
+            static fn (string $value): string => trim($value),
             explode(',', (string) env('OAUTH_ALLOWED_REDIRECT_URIS', 'dinfy://auth-callback'))
         ))),
         'fallback_redirect_uri' => env('OAUTH_FALLBACK_REDIRECT_URI', 'dinfy://auth-callback'),

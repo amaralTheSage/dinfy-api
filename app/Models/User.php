@@ -14,7 +14,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -26,7 +26,7 @@ class User extends Authenticatable
         'name',
         'email',
         'email_verified_at',
-        'auth0_id',
+        'workos_user_id',
         'phone',
         'phone_normalized',
         'whatsapp_phone',
@@ -42,7 +42,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
-        'auth0_id',
+        'workos_user_id',
         'phone_normalized',
         'whatsapp_phone_normalized',
         'remember_token',

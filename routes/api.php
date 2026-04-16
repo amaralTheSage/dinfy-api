@@ -1,16 +1,16 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AssistantWebhookController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\SocialAuthController;
-use App\Http\Controllers\AssistantWebhookController;
-use App\Http\Controllers\MercadoPagoWebhookController;
-use App\Http\Controllers\MeController;
 use App\Http\Controllers\FinancialAccountController;
-use App\Http\Controllers\FinancialTransactionController;
 use App\Http\Controllers\FinancialBudgetController;
+use App\Http\Controllers\FinancialTransactionController;
+use App\Http\Controllers\MeController;
+use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Http\Controllers\SubscriptionController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -18,10 +18,10 @@ Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::get('/oauth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
-        ->whereIn('provider', ['auth0'])
+        ->whereIn('provider', ['workos'])
         ->name('auth.oauth.redirect');
     Route::get('/oauth/{provider}/callback', [SocialAuthController::class, 'callback'])
-        ->whereIn('provider', ['auth0'])
+        ->whereIn('provider', ['workos'])
         ->name('auth.oauth.callback');
     Route::post('/oauth/exchange', [SocialAuthController::class, 'exchange'])
         ->name('auth.oauth.exchange');
