@@ -4,20 +4,16 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Auth\WorkosAuthService;
 use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function register(Request $request, WorkosAuthService $workosAuth)
     {
-        Log::info('Register atingido');
-
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
@@ -31,60 +27,71 @@ class AuthController extends Controller
 
         $this->ensurePhoneIsAvailable($phoneNormalized);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $phone,
-            'phone_normalized' => $phoneNormalized,
-            'password' => $validated['password'],
-        ]);
+        try {
+            $user = $workosAuth->registerWithPassword(
+                name: $validated['name'],
+                email: $validated['email'],
+                password: $validated['password'],
+                phone: $phone,
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\RuntimeException $exception) {
+            Log::warning('WorkOS register failed.', [
+                'message' => $exception->getMessage(),
+            ]);
 
-        $tokenName = $request->userAgent() ?: 'auth-token';
-        $token = $user->createToken($tokenName)->plainTextToken;
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        } catch (\Throwable $exception) {
+            Log::error('Unexpected WorkOS register failure.', [
+                'message' => $exception->getMessage(),
+            ]);
 
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ], 201);
+            return response()->json([
+                'message' => 'Nao foi possivel criar a conta agora.',
+            ], 503);
+        }
+
+        return $this->authenticatedResponse($request, $user, 201);
     }
 
-    public function login(Request $request)
+    public function login(Request $request, WorkosAuthService $workosAuth)
     {
         $validated = $request->validate([
             'login' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $login = $validated['login'];
-        $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
-
-        /** @var User|null $user */
-        $user = $field === 'email'
-            ? User::query()->where('email', $login)->first()
-            : User::query()
-                ->where(function ($query) use ($login): void {
-                    $query->where('phone', $login);
-
-                    $variants = PhoneNormalizer::variants($login);
-                    if ($variants !== []) {
-                        $query->orWhereIn('phone_normalized', $variants);
-                    }
-                })
-                ->first();
-
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
-            throw ValidationException::withMessages([
-                'login' => ['The provided credentials are incorrect.'],
+        try {
+            $user = $workosAuth->authenticateWithPassword(
+                login: $validated['login'],
+                password: $validated['password'],
+                ipAddress: $request->ip(),
+                userAgent: $request->userAgent(),
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\RuntimeException $exception) {
+            Log::warning('WorkOS login failed.', [
+                'message' => $exception->getMessage(),
             ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        } catch (\Throwable $exception) {
+            Log::error('Unexpected WorkOS login failure.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Nao foi possivel concluir o login agora.',
+            ], 503);
         }
 
-        $tokenName = $request->userAgent() ?: 'auth-token';
-        $token = $user->createToken($tokenName)->plainTextToken;
-
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ]);
+        return $this->authenticatedResponse($request, $user);
     }
 
     public function logout(Request $request)
@@ -94,39 +101,52 @@ class AuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function forgotPassword(Request $request)
+    public function forgotPassword(Request $request, WorkosAuthService $workosAuth)
     {
         $validated = $request->validate([
             'email' => ['required', 'string', 'email', 'max:255'],
             'reset_url' => ['nullable', 'string', 'max:2048'],
         ]);
 
-        if (!empty($validated['reset_url'])) {
+        if (! empty($validated['reset_url'])) {
             $parsed = parse_url((string) $validated['reset_url']);
             $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
-            if ($scheme === '' || !in_array($scheme, ['http', 'https', 'dinfy'], true)) {
+            if ($scheme === '' || ! in_array($scheme, ['http', 'https', 'dinfy'], true)) {
                 throw ValidationException::withMessages([
                     'reset_url' => ['The reset url scheme must be http, https or dinfy.'],
                 ]);
             }
         }
 
-        /** @var User|null $user */
-        $user = User::query()
-            ->where('email', $validated['email'])
-            ->first();
+        try {
+            $workosAuth->sendPasswordReset(
+                email: $validated['email'],
+                resetUrl: $validated['reset_url'] ?? null,
+            );
+        } catch (\RuntimeException $exception) {
+            Log::warning('WorkOS password reset request failed.', [
+                'message' => $exception->getMessage(),
+            ]);
 
-        if ($user) {
-            $token = Password::broker()->createToken($user);
-            $user->sendPasswordResetNotification($token, $validated['reset_url'] ?? null);
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        } catch (\Throwable $exception) {
+            Log::error('Unexpected WorkOS password reset request failure.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Nao foi possivel iniciar a recuperacao de senha agora.',
+            ], 503);
         }
 
         return response()->json([
-            'message' => 'Se o e-mail existir na nossa base, você receberá as instruções de recuperação em instantes.',
+            'message' => 'Se o e-mail existir na nossa base, voce recebera as instrucoes de recuperacao em instantes.',
         ]);
     }
 
-    public function resetPassword(Request $request)
+    public function resetPassword(Request $request, WorkosAuthService $workosAuth)
     {
         $validated = $request->validate([
             'email' => ['required', 'string', 'email', 'max:255'],
@@ -134,43 +154,40 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $status = Password::reset(
-            [
-                'email' => $validated['email'],
-                'token' => $validated['token'],
-                'password' => $validated['password'],
-                'password_confirmation' => $request->input('password_confirmation'),
-            ],
-            function (User $user, string $password): void {
-                $user->forceFill([
-                    'password' => $password,
-                    'remember_token' => Str::random(60),
-                ])->save();
-
-                $user->tokens()->delete();
-            }
-        );
-
-        if ($status === Password::PASSWORD_RESET) {
-            return response()->json([
-                'message' => 'Senha redefinida com sucesso.',
+        try {
+            $workosAuth->confirmPasswordReset(
+                email: $validated['email'],
+                token: $validated['token'],
+                newPassword: $validated['password'],
+            );
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\RuntimeException $exception) {
+            Log::warning('WorkOS password reset confirmation failed.', [
+                'message' => $exception->getMessage(),
             ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        } catch (\Throwable $exception) {
+            Log::error('Unexpected WorkOS password reset confirmation failure.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Nao foi possivel redefinir a senha agora.',
+            ], 503);
         }
 
-        $message = match ($status) {
-            Password::INVALID_TOKEN => 'Token inválido ou expirado.',
-            Password::INVALID_USER => 'Não encontramos um usuário com esse e-mail.',
-            default => 'Não foi possível redefinir a senha.',
-        };
-
-        throw ValidationException::withMessages([
-            'email' => [$message],
+        return response()->json([
+            'message' => 'Senha redefinida com sucesso.',
         ]);
     }
 
     private function ensurePhoneIsAvailable(?string $phoneNormalized, ?int $ignoreUserId = null): void
     {
-        if (!$phoneNormalized) {
+        if (! $phoneNormalized) {
             return;
         }
 
@@ -185,8 +202,19 @@ class AuthController extends Controller
 
         if ($query->exists()) {
             throw ValidationException::withMessages([
-                'phone' => ['Este telefone já está em uso.'],
+                'phone' => ['Este telefone ja esta em uso.'],
             ]);
         }
+    }
+
+    private function authenticatedResponse(Request $request, User $user, int $status = 200)
+    {
+        $tokenName = $request->userAgent() ?: 'auth-token';
+        $token = $user->createToken($tokenName)->plainTextToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ], $status);
     }
 }

@@ -17,6 +17,7 @@ class SocialAuthService
 
     public function __construct(
         private readonly WorkOS $workos,
+        private readonly WorkosAuthService $workosAuth,
     ) {}
 
     public function validateRedirectUri(string $redirectUri): string
@@ -75,11 +76,16 @@ class SocialAuthService
         return $payload;
     }
 
-    public function authorizationUrl(string $provider, string $state): string
+    public function authorizationUrl(
+        string $provider,
+        string $state,
+        ?UserManagementAuthenticationScreenHint $screenHint = null,
+        ?string $loginHint = null,
+    ): string
     {
         $this->ensureSupportedProvider($provider);
 
-        return $this->workosAuthorizationUrl($state);
+        return $this->workosAuthorizationUrl($state, $screenHint, $loginHint);
     }
 
     public function exchangeCodeForIdentity(string $provider, string $code): SocialIdentity
@@ -93,53 +99,7 @@ class SocialAuthService
     {
         $this->ensureSupportedProvider($provider);
 
-        $email = Str::lower(trim($identity->email));
-
-        $user = User::query()
-            ->where('workos_user_id', $identity->providerId)
-            ->first();
-
-        if (! $user) {
-            $user = User::query()
-                ->whereRaw('LOWER(email) = ?', [$email])
-                ->first();
-        }
-
-        if ($user) {
-            $updates = [];
-
-            if ($user->workos_user_id !== $identity->providerId) {
-                $updates['workos_user_id'] = $identity->providerId;
-            }
-
-            if ($identity->emailVerified && $user->email_verified_at === null) {
-                $updates['email_verified_at'] = now();
-            }
-
-            if (trim((string) $user->name) === '' && trim($identity->name) !== '') {
-                $updates['name'] = $identity->name;
-            }
-
-            if (! $user->avatar && $identity->avatar) {
-                $updates['avatar'] = $identity->avatar;
-            }
-
-            if ($updates !== []) {
-                $user->fill($updates);
-                $user->save();
-            }
-
-            return $user->refresh();
-        }
-
-        return User::create([
-            'name' => trim($identity->name) !== '' ? $identity->name : Str::before($email, '@'),
-            'email' => $email,
-            'workos_user_id' => $identity->providerId,
-            'email_verified_at' => $identity->emailVerified ? now() : null,
-            'avatar' => $identity->avatar,
-            'password' => Str::random(40),
-        ]);
+        return $this->workosAuth->syncLocalUserFromIdentity($identity);
     }
 
     public function issueExchangeCode(User $user, string $provider): string
@@ -211,6 +171,26 @@ class SocialAuthService
         return route('auth.oauth.callback', ['provider' => $provider]);
     }
 
+    public function resolveScreenHint(mixed $screenHint): ?UserManagementAuthenticationScreenHint
+    {
+        $screenHint = Str::lower(trim((string) $screenHint));
+
+        return match ($screenHint) {
+            '', 'sign-in', 'signin', 'login' => $screenHint === ''
+                ? null
+                : UserManagementAuthenticationScreenHint::SignIn,
+            'sign-up', 'signup', 'register' => UserManagementAuthenticationScreenHint::SignUp,
+            default => throw new SocialAuthException('A tela de autenticacao solicitada e invalida.'),
+        };
+    }
+
+    public function resolveLoginHint(mixed $loginHint): ?string
+    {
+        $loginHint = trim((string) $loginHint);
+
+        return $loginHint !== '' ? $loginHint : null;
+    }
+
     private function ensureSupportedProvider(string $provider): void
     {
         if ($provider !== self::PROVIDER) {
@@ -218,7 +198,11 @@ class SocialAuthService
         }
     }
 
-    private function workosAuthorizationUrl(string $state): string
+    private function workosAuthorizationUrl(
+        string $state,
+        ?UserManagementAuthenticationScreenHint $screenHint = null,
+        ?string $loginHint = null,
+    ): string
     {
         if (! $this->hasWorkosCredentials()) {
             throw new SocialAuthException('O login com WorkOS nao esta configurado.');
@@ -227,7 +211,8 @@ class SocialAuthService
         try {
             return $this->workos->userManagement()->getAuthorizationUrl(
                 redirectUri: $this->callbackUrl(self::PROVIDER),
-                screenHint: UserManagementAuthenticationScreenHint::SignIn,
+                screenHint: $screenHint ?? UserManagementAuthenticationScreenHint::SignIn,
+                loginHint: $loginHint,
                 provider: UserManagementAuthenticationProvider::Authkit,
                 state: $state,
             );

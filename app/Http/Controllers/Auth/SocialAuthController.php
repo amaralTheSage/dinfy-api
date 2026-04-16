@@ -17,8 +17,15 @@ class SocialAuthController extends Controller
         try {
             $redirectUri = $socialAuth->resolveRedirectUri($request->query('redirect_uri'));
             $state = $socialAuth->createAuthorizationState($provider, $redirectUri);
+            $screenHint = $socialAuth->resolveScreenHint($request->query('screen_hint'));
+            $loginHint = $socialAuth->resolveLoginHint($request->query('login_hint'));
 
-            return redirect()->away($socialAuth->authorizationUrl($provider, $state));
+            return redirect()->away($socialAuth->authorizationUrl(
+                $provider,
+                $state,
+                $screenHint,
+                $loginHint,
+            ));
         } catch (SocialAuthException $exception) {
             $fallbackRedirectUri = $socialAuth->fallbackRedirectUri();
 

@@ -5,6 +5,7 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\CarbonImmutable;
 
 class PasswordResetTokenNotification extends Notification
 {
@@ -13,6 +14,7 @@ class PasswordResetTokenNotification extends Notification
     public function __construct(
         private readonly string $token,
         private readonly ?string $resetUrl = null,
+        private readonly ?\DateTimeInterface $expiresAt = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -22,8 +24,16 @@ class PasswordResetTokenNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $broker = config('auth.defaults.passwords', 'users');
-        $expireMinutes = (int) config("auth.passwords.$broker.expire", 60);
+        $fallbackExpireMinutes = (int) config('auth.passwords.users.expire', 60);
+        $expireMinutes = $fallbackExpireMinutes;
+
+        if ($this->expiresAt) {
+            $expiresAt = CarbonImmutable::instance($this->expiresAt);
+            $expireMinutes = max(
+                1,
+                (int) ceil(max(0, now()->diffInSeconds($expiresAt, false)) / 60)
+            );
+        }
 
         $frontendResetUrl = $this->resetUrl;
         if ($frontendResetUrl === null || trim($frontendResetUrl) === '') {

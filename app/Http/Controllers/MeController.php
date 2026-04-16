@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Auth\WorkosAuthService;
 use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -14,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class MeController extends Controller
 {
-    public function update(Request $request)
+    public function update(Request $request, WorkosAuthService $workosAuth)
     {
         $user = $request->user();
 
@@ -43,7 +44,33 @@ class MeController extends Controller
             $this->ensurePhoneIsAvailable($validated['phone_normalized'], $user->id);
         }
 
-        $user->fill($validated);
+        $workosAttributes = array_filter([
+            'name' => $validated['name'] ?? null,
+            'email' => $validated['email'] ?? null,
+        ], static fn ($value): bool => $value !== null);
+
+        if ($workosAttributes !== []) {
+            try {
+                $user = $workosAuth->syncProfile($user, $workosAttributes);
+            } catch (\RuntimeException $exception) {
+                Log::warning('WorkOS profile sync failed.', [
+                    'user_id' => $user->id,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                ], 503);
+            }
+        }
+
+        if (array_key_exists('phone', $validated)) {
+            $user->fill([
+                'phone' => $validated['phone'],
+                'phone_normalized' => $validated['phone_normalized'],
+            ]);
+        }
+
         $user->save();
 
         return response()->json($user);

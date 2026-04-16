@@ -85,8 +85,12 @@ class User extends Authenticatable
         return $this->hasMany(UserSubscription::class);
     }
 
-    public function sendPasswordResetNotification($token, ?string $resetUrl = null): void
+    public function sendPasswordResetNotification(
+        $token,
+        ?string $resetUrl = null,
+        ?\DateTimeInterface $expiresAt = null,
+    ): void
     {
-        $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl));
+        $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl, $expiresAt));
     }
 }

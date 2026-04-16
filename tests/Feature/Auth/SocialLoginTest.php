@@ -1,12 +1,10 @@
 <?php
 
 use App\Models\User;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
-use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use WorkOS\WorkOS;
+
+require_once __DIR__.'/WorkosTestHelpers.php';
 
 uses(RefreshDatabase::class);
 
@@ -22,13 +20,13 @@ beforeEach(function (): void {
 
 test('workos social login creates a user and exchanges the oauth code', function () {
     bindWorkosClient([
-        workosResponse(workosAuthenticatePayload(
+        workosResponse(workosAuthenticatePayload(workosUserPayload(
             id: 'user_123',
             email: 'john@example.com',
             firstName: 'John',
             lastName: 'WorkOS',
             picture: 'https://example.com/workos-avatar.png',
-        )),
+        ))),
     ]);
 
     $redirectResponse = $this->get('/api/auth/oauth/workos/redirect?redirect_uri='.urlencode('dinfy://auth-callback'));
@@ -52,11 +50,9 @@ test('workos social login creates a user and exchanges the oauth code', function
     expect(oauthQueryParameter($callbackLocation, 'provider'))->toBe('workos');
     expect($exchangeCode)->not->toBeNull();
 
-    $exchangeResponse = $this->postJson('/api/auth/oauth/exchange', [
+    $this->postJson('/api/auth/oauth/exchange', [
         'code' => $exchangeCode,
-    ]);
-
-    $exchangeResponse
+    ])
         ->assertOk()
         ->assertJsonStructure([
             'user' => ['id', 'name', 'email'],
@@ -86,13 +82,13 @@ test('workos social login links an existing account by email', function () {
     ]);
 
     bindWorkosClient([
-        workosResponse(workosAuthenticatePayload(
+        workosResponse(workosAuthenticatePayload(workosUserPayload(
             id: 'user_456',
             email: 'jane@example.com',
             firstName: 'Jane',
             lastName: 'Linked',
             picture: 'https://example.com/workos-linked-avatar.png',
-        )),
+        ))),
     ]);
 
     $redirectResponse = $this->get('/api/auth/oauth/workos/redirect?redirect_uri='.urlencode('dinfy://auth-callback'));
@@ -127,12 +123,12 @@ test('workos social login links an existing account by email', function () {
 
 test('workos redirect falls back to the configured app callback when no redirect uri is provided', function () {
     bindWorkosClient([
-        workosResponse(workosAuthenticatePayload(
+        workosResponse(workosAuthenticatePayload(workosUserPayload(
             id: 'user_789',
             email: 'fallback@example.com',
             firstName: 'Fallback',
             lastName: 'User',
-        )),
+        ))),
     ]);
 
     $redirectResponse = $this->get('/api/auth/oauth/workos/redirect');
@@ -154,71 +150,3 @@ test('workos redirect falls back to the configured app callback when no redirect
     expect(oauthQueryParameter($callbackLocation, 'provider'))->toBe('workos');
     expect(oauthQueryParameter($callbackLocation, 'oauth_code'))->not->toBeNull();
 });
-
-function bindWorkosClient(array $responses): void
-{
-    $mockHandler = new MockHandler($responses);
-    $handler = HandlerStack::create($mockHandler);
-
-    app()->instance(WorkOS::class, new WorkOS(
-        apiKey: (string) config('services.workos.api_key'),
-        clientId: (string) config('services.workos.client_id'),
-        handler: $handler,
-    ));
-}
-
-function workosResponse(array $payload, int $status = 200): Psr7Response
-{
-    return new Psr7Response(
-        $status,
-        ['Content-Type' => 'application/json'],
-        json_encode($payload, JSON_THROW_ON_ERROR),
-    );
-}
-
-function workosAuthenticatePayload(
-    string $id,
-    string $email,
-    string $firstName,
-    string $lastName,
-    ?string $picture = null,
-): array {
-    return [
-        'user' => [
-            'object' => 'user',
-            'id' => $id,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'profile_picture_url' => $picture,
-            'email' => $email,
-            'email_verified' => true,
-            'external_id' => null,
-            'last_sign_in_at' => '2026-04-15T19:00:00.000Z',
-            'created_at' => '2026-04-15T19:00:00.000Z',
-            'updated_at' => '2026-04-15T19:00:00.000Z',
-            'metadata' => [],
-            'locale' => 'pt-BR',
-        ],
-        'access_token' => 'workos-access-token',
-        'refresh_token' => 'workos-refresh-token',
-        'organization_id' => null,
-    ];
-}
-
-function oauthQueryParameter(?string $url, string $parameter): ?string
-{
-    if ($url === null || trim($url) === '') {
-        return null;
-    }
-
-    $query = parse_url($url, PHP_URL_QUERY);
-    if (! is_string($query) || $query === '') {
-        return null;
-    }
-
-    parse_str($query, $parameters);
-
-    $value = $parameters[$parameter] ?? null;
-
-    return is_string($value) && trim($value) !== '' ? $value : null;
-}
