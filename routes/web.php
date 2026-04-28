@@ -1,6 +1,9 @@
 <?php
 
 use App\Services\Subscriptions\SubscriptionCatalog;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/check', function (SubscriptionCatalog $catalog) {
@@ -15,3 +18,32 @@ Route::get('/check', function (SubscriptionCatalog $catalog) {
         ],
     ]);
 });
+
+Route::get('/test-of', function () {
+    return view('api_test');
+});
+
+Route::post('/open-finance-test', function (Request $request) {
+    Log::info($request);
+
+    $headers = $request->validate(['tokensh' => 'required', 'cnpjsh' => 'required']);
+
+    $body = $request->validate([
+        'name' => 'required',
+        'cpfCnpj' => 'required',
+        'neighborhood' => 'required',
+        'addressNumber' => 'required',
+        'zipcode' => 'required',
+        'state' => 'required',
+        'city' => 'required',
+        'statementActived' => 'required',
+    ]);
+
+    $api_url = env('OPENFINANCE_API_URL') . 'payer';
+
+    $response = Http::withHeaders($headers)->post($api_url, $body);
+
+    Log::info($response);
+
+    return redirect()->back()->with(['response' => $response]);
+})->name('openfinance.create_payer');
