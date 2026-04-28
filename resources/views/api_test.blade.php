@@ -10,9 +10,12 @@
 
 <body class="bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
 
-        @session('response')
-                {{ $response }}
-        @endsession
+        @if (session('response'))
+                <div class="p-4 bg-gray-100 rounded border">
+                        <h3 class="font-bold">API Response:</h3>
+                        <pre>{{ json_encode(session('response'), JSON_PRETTY_PRINT) }}</pre>
+                </div>
+        @endif
 
 
         <div class="max-w-2xl mx-auto">
@@ -20,7 +23,7 @@
                         <p class="text-xs font-mono text-gray-400 uppercase tracking-widest mb-1">API Endpoint</p>
                         <h1
                                 class="text-sm font-mono bg-gray-800 text-green-400 p-3 rounded-md shadow-inner inline-block">
-                                {{ env('OPENFINANCE_API_URL') }}/payer
+                                {{ env('OPENFINANCE_API_URL') }}payer
                         </h1>
                 </div>
 
