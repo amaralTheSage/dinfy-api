@@ -43,7 +43,18 @@ Route::post('/open-finance-test', function (Request $request) {
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
 
-    Log::info($response);
+    $data = $response->json();
 
-    return redirect()->back()->with(['response' => $response]);
+    if ($data['errors']['internalCode']) {
+        Log::debug($data['errors']['internalCode']);
+    }
+
+    if (($data['errors']['internalCode'] ?? null) == 7632) {
+        Log::debug('Hit internal code 7632');
+        $response = Http::withHeaders($headers)->put($api_url, ['statementActivated' => true]);
+    }
+
+    Log::info('Response' . $response);
+
+    return redirect()->back()->with(['response' => $response->json()]);
 })->name('openfinance.create_payer');
