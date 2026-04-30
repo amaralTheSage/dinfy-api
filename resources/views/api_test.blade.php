@@ -164,8 +164,11 @@
                 console.error('CPF/CNPJ input or hidden field not found:', { source, target });
         }
 
-        console.log('Response:', @json(session('response')));
-        console.log('Response Account:', @json(session('response_account')));
+        // Log responses after page fully renders
+        setTimeout(() => {
+            console.log('Response:', @json(session('response')));
+            console.log('Response Account:', @json(session('response_account')));
+        }, 100);
     </script>
 
 </body>

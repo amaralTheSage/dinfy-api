@@ -85,9 +85,14 @@ Route::post('/create-account-test', function (Request $request) {
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
 
-    Log::debug('CREATE ACCOUNT **RESPONSE: ', $response->json());
+    Log::debug('CREATE ACCOUNT **RESPONSE STATUS: ', ['status' => $response->status()]);
+    Log::debug('CREATE ACCOUNT **RESPONSE BODY: ', ['body' => $response->body()]);
 
-    return redirect()->back()->with(['response_account' => $response->json()]);
+    $responseData = $response->json() ?? $response->body();
+
+    Log::debug('CREATE ACCOUNT **RESPONSE: ', is_array($responseData) ? $responseData : ['raw' => $responseData]);
+
+    return redirect()->back()->with(['response_account' => $responseData]);
 
     //  # passo 2: Criar conta
     // Método:
