@@ -1,0 +1,61 @@
+{
+    "id": "7b050f49a4de401f9cf36ed24f4df5a4",
+    "back_url": "https://dinfy.app",
+    "collector_id": 2636680950,
+    "application_id": 6122342385970614,
+    "reason": "Dinfy Mensal",
+    "status": "active",
+    "date_created": "2026-03-26T11:29:21.124-04:00",
+    "last_modified": "2026-03-26T11:29:21.124-04:00",
+    "init_point": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=7b050f49a4de401f9cf36ed24f4df5a4",
+    "auto_recurring": {
+        "frequency": 1,
+        "frequency_type": "months",
+        "transaction_amount": 0.5,
+        "currency_id": "BRL"
+    },
+    "payment_methods_allowed": {}
+}
+
+
+
+{
+    "id": "9436bbe8bf8748d18375917f697dd1db",
+    "back_url": "https://dinfy.app",
+    "collector_id": 2636680950,
+    "application_id": 6122342385970614,
+    "reason": "Dinfy Anual",
+    "status": "active",
+    "date_created": "2026-03-26T11:34:21.997-04:00",
+    "last_modified": "2026-03-26T11:34:21.997-04:00",
+    "init_point": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=9436bbe8bf8748d18375917f697dd1db",
+    "auto_recurring": {
+        "frequency": 12,
+        "frequency_type": "months",
+        "transaction_amount": 0.5,
+        "currency_id": "BRL"
+    },
+    "payment_methods_allowed": {}
+}
+
+
+
+
+{
+    "id": "7b05**************5a4",
+    "back_url": "https://dinfy.app",
+    "collector_id": 26********,
+    "application_id": 61***********,
+    "reason": "Dinfy Mensal",
+    "status": "active",
+    "date_created": "2026-03-26T11:29:21.124-04:00",
+    "last_modified": "2026-03-26T11:29:21.124-04:00",
+    "init_point": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=7b05***************",
+    "auto_recurring": {
+        "frequency": 1,
+        "frequency_type": "months",
+        "transaction_amount": 0.5,
+        "currency_id": "BRL"
+    },
+    "payment_methods_allowed": {}
+}
