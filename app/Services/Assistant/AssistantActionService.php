@@ -16,8 +16,8 @@ use Illuminate\Validation\ValidationException;
 class AssistantActionService
 {
     /**
-     * @param array<string, mixed> $parameters
-     * @param array<string, mixed> $metadata
+     * @param  array<string, mixed>  $parameters
+     * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
      */
     public function execute(User $user, string $intent, array $parameters = [], array $metadata = []): array
@@ -35,8 +35,8 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
-     * @param array<string, mixed> $metadata
+     * @param  array<string, mixed>  $parameters
+     * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
      */
     private function createTransaction(User $user, array $parameters, array $metadata): array
@@ -66,7 +66,7 @@ class AssistantActionService
             ?? $merchant
             ?? $category;
 
-        $transaction = new FinancialTransaction();
+        $transaction = new FinancialTransaction;
         $transaction->user_id = $user->id;
         $transaction->account_id = $account?->id;
         $transaction->type = $type;
@@ -98,8 +98,8 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
-     * @param array<string, mixed> $metadata
+     * @param  array<string, mixed>  $parameters
+     * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
      */
     private function createBudget(User $user, array $parameters, array $metadata): array
@@ -115,7 +115,7 @@ class AssistantActionService
 
         $category = $this->normalizeCategory($validated['category'] ?? null, 'budget');
 
-        $budget = new FinancialBudget();
+        $budget = new FinancialBudget;
         $budget->user_id = $user->id;
         $budget->name = trim((string) $validated['name']);
         $budget->target_amount = $validated['targetAmount'];
@@ -144,7 +144,7 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param  array<string, mixed>  $parameters
      * @return array<string, mixed>
      */
     private function getBalance(User $user, array $parameters): array
@@ -155,9 +155,9 @@ class AssistantActionService
             'accountLast4' => ['nullable', 'string', 'max:4'],
         ])->validate();
 
-        $hasSpecificAccount = !empty($validated['accountId'])
-            || !empty($validated['accountName'])
-            || !empty($validated['accountLast4']);
+        $hasSpecificAccount = ! empty($validated['accountId'])
+            || ! empty($validated['accountName'])
+            || ! empty($validated['accountLast4']);
 
         if ($hasSpecificAccount) {
             $account = $this->resolveAccount(
@@ -217,7 +217,7 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param  array<string, mixed>  $parameters
      * @return array<string, mixed>
      */
     private function getBudgetStatus(User $user, array $parameters): array
@@ -232,20 +232,20 @@ class AssistantActionService
             ->where('user_id', $user->id)
             ->latest();
 
-        if (!empty($validated['budgetId'])) {
+        if (! empty($validated['budgetId'])) {
             $query->where('id', $validated['budgetId']);
         }
 
         $budgets = $query->get();
 
-        if (!empty($validated['budgetName'])) {
+        if (! empty($validated['budgetName'])) {
             $budgets = $budgets->filter(function (FinancialBudget $budget) use ($validated): bool {
                 return $this->normalizeText($budget->name) === $this->normalizeText((string) $validated['budgetName'])
                     || str_contains($this->normalizeText($budget->name), $this->normalizeText((string) $validated['budgetName']));
             })->values();
         }
 
-        if (!empty($validated['category'])) {
+        if (! empty($validated['category'])) {
             $category = $this->normalizeCategory($validated['category'], 'budget') ?? trim((string) $validated['category']);
             $budgets = $budgets->filter(function (FinancialBudget $budget) use ($category): bool {
                 return $this->normalizeText((string) $budget->category) === $this->normalizeText($category);
@@ -263,7 +263,7 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param  array<string, mixed>  $parameters
      * @return array<string, mixed>
      */
     private function listRecentTransactions(User $user, array $parameters): array
@@ -284,26 +284,26 @@ class AssistantActionService
             ->with('account:id,name,marketing_name,number_last4')
             ->latest('occurred_at');
 
-        if (!empty($validated['type'])) {
+        if (! empty($validated['type'])) {
             $query->where('type', strtoupper((string) $validated['type']));
         }
 
-        if (!empty($validated['startDate'])) {
+        if (! empty($validated['startDate'])) {
             $query->where('occurred_at', '>=', Carbon::parse($validated['startDate'])->startOfDay());
         }
 
-        if (!empty($validated['endDate'])) {
+        if (! empty($validated['endDate'])) {
             $query->where('occurred_at', '<=', Carbon::parse($validated['endDate'])->endOfDay());
         }
 
-        if (!empty($validated['category'])) {
+        if (! empty($validated['category'])) {
             $query->where('category', $this->normalizeCategory(
                 $validated['category'],
-                !empty($validated['type']) && strtoupper((string) $validated['type']) === 'CREDIT' ? 'income' : 'expense',
+                ! empty($validated['type']) && strtoupper((string) $validated['type']) === 'CREDIT' ? 'income' : 'expense',
             ) ?? trim((string) $validated['category']));
         }
 
-        if (!empty($validated['accountId']) || !empty($validated['accountName']) || !empty($validated['accountLast4'])) {
+        if (! empty($validated['accountId']) || ! empty($validated['accountName']) || ! empty($validated['accountLast4'])) {
             $account = $this->resolveAccount(
                 $user,
                 $validated['accountId'] ?? null,
@@ -327,7 +327,7 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param  array<string, mixed>  $parameters
      */
     private function resolveTransactionAccount(User $user, array $parameters): ?FinancialAccount
     {
@@ -344,13 +344,13 @@ class AssistantActionService
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param  array<string, mixed>  $parameters
      */
     private function hasAccountFilters(array $parameters): bool
     {
-        return !empty($parameters['accountId'])
-            || !empty($parameters['accountName'])
-            || !empty($parameters['accountLast4']);
+        return ! empty($parameters['accountId'])
+            || ! empty($parameters['accountName'])
+            || ! empty($parameters['accountLast4']);
     }
 
     private function resolveAccount(

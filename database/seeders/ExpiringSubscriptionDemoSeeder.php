@@ -57,7 +57,7 @@ class ExpiringSubscriptionDemoSeeder extends Seeder
             (string) Str::uuid(),
         );
 
-        $paymentId = 'seed_pay_' . Str::lower(Str::random(12));
+        $paymentId = 'seed_pay_'.Str::lower(Str::random(12));
 
         $subscription = UserSubscription::query()->create([
             'user_id' => $user->id,

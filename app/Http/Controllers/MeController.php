@@ -114,7 +114,7 @@ class MeController extends Controller
         ]);
         $user->save();
 
-        if ($consent && (!$wasOptedIn || $previousPhoneNormalized !== $phoneNormalized)) {
+        if ($consent && (! $wasOptedIn || $previousPhoneNormalized !== $phoneNormalized)) {
             $this->sendWhatsAppOptInWebhook($user, $phone, $phoneNormalized, $optedInAt);
         }
 
@@ -152,7 +152,7 @@ class MeController extends Controller
 
     private function deleteAvatarFileIfPresent(?string $avatar): void
     {
-        if (!$avatar) {
+        if (! $avatar) {
             return;
         }
 
@@ -164,7 +164,7 @@ class MeController extends Controller
 
     private function ensurePhoneIsAvailable(?string $phoneNormalized, int $ignoreUserId): void
     {
-        if (!$phoneNormalized) {
+        if (! $phoneNormalized) {
             return;
         }
 
@@ -185,7 +185,7 @@ class MeController extends Controller
 
     private function ensureWhatsAppPhoneIsAvailable(?string $phoneNormalized, int $ignoreUserId): void
     {
-        if (!$phoneNormalized) {
+        if (! $phoneNormalized) {
             return;
         }
 

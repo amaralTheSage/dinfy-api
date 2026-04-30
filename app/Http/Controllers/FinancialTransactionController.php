@@ -51,8 +51,8 @@ class FinancialTransactionController extends Controller
 
         $account = $this->resolveAccount($request, $validated['accountId']);
 
-        $model = new FinancialTransaction();
-        if (!empty($validated['id'])) {
+        $model = new FinancialTransaction;
+        if (! empty($validated['id'])) {
             $model->id = $validated['id'];
         }
 

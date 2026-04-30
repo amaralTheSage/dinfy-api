@@ -49,7 +49,7 @@ class PasswordResetTokenNotification extends Notification
             $resetUrl = "{$url}{$separator}token={$token}&email={$email}";
         }
 
-        return (new MailMessage())
+        return (new MailMessage)
             ->subject('Recuperação de senha - Dinfy')
             ->view('emails.password_reset', [
                 'resetUrl' => $resetUrl,

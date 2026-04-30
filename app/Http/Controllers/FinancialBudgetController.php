@@ -46,8 +46,8 @@ class FinancialBudgetController extends Controller
             'data' => ['nullable', 'array'],
         ]);
 
-        $model = new FinancialBudget();
-        if (!empty($validated['id'])) {
+        $model = new FinancialBudget;
+        if (! empty($validated['id'])) {
             $model->id = $validated['id'];
         }
 

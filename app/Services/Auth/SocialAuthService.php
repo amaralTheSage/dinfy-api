@@ -81,8 +81,7 @@ class SocialAuthService
         string $state,
         ?UserManagementAuthenticationScreenHint $screenHint = null,
         ?string $loginHint = null,
-    ): string
-    {
+    ): string {
         $this->ensureSupportedProvider($provider);
 
         return $this->workosAuthorizationUrl($state, $screenHint, $loginHint);
@@ -202,8 +201,7 @@ class SocialAuthService
         string $state,
         ?UserManagementAuthenticationScreenHint $screenHint = null,
         ?string $loginHint = null,
-    ): string
-    {
+    ): string {
         if (! $this->hasWorkosCredentials()) {
             throw new SocialAuthException('O login com WorkOS nao esta configurado.');
         }

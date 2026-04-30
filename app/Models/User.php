@@ -89,8 +89,7 @@ class User extends Authenticatable
         $token,
         ?string $resetUrl = null,
         ?\DateTimeInterface $expiresAt = null,
-    ): void
-    {
+    ): void {
         $this->notify(new PasswordResetTokenNotification((string) $token, $resetUrl, $expiresAt));
     }
 }

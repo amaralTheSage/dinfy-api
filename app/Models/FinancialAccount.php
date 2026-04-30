@@ -59,7 +59,7 @@ class FinancialAccount extends Model
     protected static function booted(): void
     {
         static::creating(function (self $model): void {
-            if (!$model->id) {
+            if (! $model->id) {
                 $model->id = (string) Str::uuid();
             }
         });
@@ -75,4 +75,3 @@ class FinancialAccount extends Model
         return $this->hasMany(FinancialTransaction::class, 'account_id');
     }
 }
-

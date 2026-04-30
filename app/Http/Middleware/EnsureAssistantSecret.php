@@ -21,7 +21,7 @@ class EnsureAssistantSecret
 
         $providedSecret = (string) $request->header($headerName, '');
 
-        if ($providedSecret === '' || !hash_equals($expectedSecret, $providedSecret)) {
+        if ($providedSecret === '' || ! hash_equals($expectedSecret, $providedSecret)) {
             return response()->json([
                 'message' => 'Unauthorized.',
             ], 401);

@@ -55,9 +55,9 @@ class FinancialAccountController extends Controller
             $existing = null;
         }
 
-        $model = $existing ?? new FinancialAccount();
+        $model = $existing ?? new FinancialAccount;
 
-        if ($id && !$existing) {
+        if ($id && ! $existing) {
             $model->id = $id;
         }
 

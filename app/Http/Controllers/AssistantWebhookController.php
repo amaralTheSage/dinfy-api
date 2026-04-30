@@ -66,7 +66,7 @@ class AssistantWebhookController extends Controller
             $requestPayload,
         );
 
-        if (!$execution->wasRecentlyCreated) {
+        if (! $execution->wasRecentlyCreated) {
             if ($execution->status === 'completed' && is_array($execution->response_payload)) {
                 return response()->json([
                     ...$execution->response_payload,
@@ -110,7 +110,7 @@ class AssistantWebhookController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $requestPayload
+     * @param  array<string, mixed>  $requestPayload
      */
     private function createExecutionPlaceholder(
         int $userId,

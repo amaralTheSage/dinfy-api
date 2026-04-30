@@ -90,14 +90,14 @@ class PhoneNormalizer
             ? substr($digits, strlen($countryCode))
             : $digits;
 
-        if (!is_string($localDigits) || !in_array(strlen($localDigits), [10, 11], true)) {
+        if (! is_string($localDigits) || ! in_array(strlen($localDigits), [10, 11], true)) {
             return [];
         }
 
         $areaCode = substr($localDigits, 0, 2);
         $subscriber = substr($localDigits, 2);
 
-        if (!is_string($subscriber) || !self::isBrazilianMobileSubscriber($subscriber)) {
+        if (! is_string($subscriber) || ! self::isBrazilianMobileSubscriber($subscriber)) {
             return [];
         }
 

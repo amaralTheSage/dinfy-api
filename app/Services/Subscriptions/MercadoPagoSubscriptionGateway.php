@@ -2,8 +2,8 @@
 
 namespace App\Services\Subscriptions;
 
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -18,7 +18,7 @@ class MercadoPagoSubscriptionGateway
     private const MERCADO_PAGO_PAYMENT_CANCELLATION_STATUS = 'cancelled';
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function createPixPayment(array $data): array
@@ -32,15 +32,15 @@ class MercadoPagoSubscriptionGateway
             'email' => $data['payer_email'] ?? null,
         ];
 
-        if (!empty($data['payer_first_name'])) {
+        if (! empty($data['payer_first_name'])) {
             $payer['first_name'] = $data['payer_first_name'];
         }
 
-        if (!empty($data['payer_last_name'])) {
+        if (! empty($data['payer_last_name'])) {
             $payer['last_name'] = $data['payer_last_name'];
         }
 
-        if (!empty($data['payer_identification_number'])) {
+        if (! empty($data['payer_identification_number'])) {
             $payer['identification'] = [
                 'type' => $data['payer_identification_type'] ?? 'CPF',
                 'number' => $data['payer_identification_number'],
@@ -55,11 +55,11 @@ class MercadoPagoSubscriptionGateway
             'payer' => $payer,
         ];
 
-        if (!empty($data['notification_url'])) {
+        if (! empty($data['notification_url'])) {
             $payload['notification_url'] = $data['notification_url'];
         }
 
-        if (!empty($data['expires_at'])) {
+        if (! empty($data['expires_at'])) {
             $payload['date_of_expiration'] = Carbon::parse($data['expires_at'])->format('Y-m-d\TH:i:s.vP');
         }
 
@@ -92,7 +92,7 @@ class MercadoPagoSubscriptionGateway
         ]);
 
         return $this->normalizePayloadStatuses($this->request()
-            ->put('/v1/payments/' . urlencode($paymentId), [
+            ->put('/v1/payments/'.urlencode($paymentId), [
                 'status' => self::MERCADO_PAGO_PAYMENT_CANCELLATION_STATUS,
             ])
             ->throw()
@@ -109,7 +109,7 @@ class MercadoPagoSubscriptionGateway
         ]);
 
         return $this->normalizePayloadStatuses($this->request()
-            ->get('/v1/payments/' . urlencode($paymentId))
+            ->get('/v1/payments/'.urlencode($paymentId))
             ->throw()
             ->json());
     }
@@ -157,13 +157,13 @@ class MercadoPagoSubscriptionGateway
         $manifestParts = [];
 
         if ($dataId !== '') {
-            $manifestParts[] = 'id:' . strtolower($dataId);
+            $manifestParts[] = 'id:'.strtolower($dataId);
         }
 
-        $manifestParts[] = 'request-id:' . $requestId;
-        $manifestParts[] = 'ts:' . $ts;
+        $manifestParts[] = 'request-id:'.$requestId;
+        $manifestParts[] = 'ts:'.$ts;
 
-        $manifest = implode(';', $manifestParts) . ';';
+        $manifest = implode(';', $manifestParts).';';
 
         $expected = hash_hmac('sha256', $manifest, $secret);
 
@@ -185,7 +185,7 @@ class MercadoPagoSubscriptionGateway
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function normalizePayloadStatuses(array $payload): array

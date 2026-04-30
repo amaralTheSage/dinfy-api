@@ -11,6 +11,5 @@ final readonly class SocialIdentity
         public string $name,
         public ?string $avatar,
         public bool $emailVerified,
-    ) {
-    }
+    ) {}
 }

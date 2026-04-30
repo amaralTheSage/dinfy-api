@@ -19,7 +19,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasColumn('user_subscriptions', 'provider')) {
+        if (! Schema::hasColumn('user_subscriptions', 'provider')) {
             return;
         }
 

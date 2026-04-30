@@ -13,7 +13,7 @@
     <div>
         <div>
             <p>API Endpoint</p>
-            <h1>{{ env('OPENFINANCE_API_URL') }}payer</h1>
+            <h1>{{ config('openfinance.url') }}payer</h1>
         </div>
 
         <div>
@@ -28,12 +28,12 @@
                         <div>
                             <div>
                                 <label for="tokensh">tokensh</label>
-                                <input type="text" id="tokensh" name="tokensh" value="{{ env('TOKENSH') }}">
+                                <input type="text" id="tokensh" name="tokensh" value="{{ config('openfinance.tokensh') }}">
                             </div>
 
                             <div>
                                 <label for="cnpjsh">cnpjsh</label>
-                                <input type="text" id="cnpjsh" name="cnpjsh" value="{{ env('CNPJSH') }}">
+                                <input type="text" id="cnpjsh" name="cnpjsh" value="{{ config('openfinance.cnpjsh') }}">
                             </div>
                         </div>
                     </div>
@@ -87,24 +87,69 @@
                 </form>
             </div>
 
-            @if (session('response_account'))
+            @if (session('response'))
                 <div>
-                    <h3>Account API Response:</h3>
-                    <pre>{{ json_encode(session('response_acount'), JSON_PRETTY_PRINT) }}</pre>
-                    <h3>Account Response:</h3>
-                    <pre>{{ json_encode(session('response_account'), JSON_PRETTY_PRINT) }}</pre>
+                    <h3>Payer API Response:</h3>
+                    <pre>{{ json_encode(session('response'), JSON_PRETTY_PRINT) }}</pre>
                 </div>
 
-                <form method='POST' action="{{ route('openfinance.create_account') }}">
+
+        <form method='POST' action="{{ route('openfinance.create_account') }}">
                     @method('POST')
                     @csrf
 
                     @include('bank_dropdown')
 
+                       <div>
+                        <h2>Auth Headers</h2>
+
+                        <div>
+                            <div>
+                                <label for="tokensh">tokensh</label>
+                                <input type="text" name="tokensh" value="{{ config('openfinance.tokensh') }}">
+                            </div>
+
+                            <div>
+                                <label for="cnpjsh">cnpjsh</label>
+                                <input type="text"  name="cnpjsh" value="{{ config('openfinance.cnpjsh') }}">
+                            </div>
+                        </div>
+                    </div>
+
                     <input type="hidden" id="cpfCnpjHidden" name="cpfCnpj" value=""/>
+
+                     <div>
+        <label for="agency">Agency</label>
+        <input type="text" id="agency" name="agency">
+    </div>
+    <div>
+        <label for="agencyDigit">Agency Digit (Opcional)</label>
+        <input type="text" id="agencyDigit" name="agencyDigit">
+    </div>
+    <div>
+        <label for="accountNumber">Account Number</label>
+        <input type="text" id="accountNumber" name="accountNumber">
+    </div>
+
+    <button type="submit">Create Account</button>
                 </form>
+
+
+
             @endif
-        </div>
+            
+            
+        
+
+
+        @if (session('response_account'))
+                <div>
+                    <h3>Account API Response:</h3>
+                    <pre>{{ json_encode(session('response_account'), JSON_PRETTY_PRINT) }}</pre>
+                </div>
+
+        @endif
+</div>
     </div>
 
     <script>

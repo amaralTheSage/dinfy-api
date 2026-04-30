@@ -6,23 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-        public function up(): void
-        {
-                Schema::table('users', function (Blueprint $table): void {
-                        $table->dropUnique(['google_id']);
-                        $table->dropUnique(['facebook_id']);
-                        $table->dropColumn(['google_id', 'facebook_id']);
-                        $table->string('auth0_id')->nullable()->unique()->after('email');
-                });
-        }
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropUnique(['google_id']);
+            $table->dropUnique(['facebook_id']);
+            $table->dropColumn(['google_id', 'facebook_id']);
+            $table->string('auth0_id')->nullable()->unique()->after('email');
+        });
+    }
 
-        public function down(): void
-        {
-                Schema::table('users', function (Blueprint $table): void {
-                        $table->dropUnique(['auth0_id']);
-                        $table->dropColumn('auth0_id');
-                        $table->string('google_id')->nullable()->unique();
-                        $table->string('facebook_id')->nullable()->unique();
-                });
-        }
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropUnique(['auth0_id']);
+            $table->dropColumn('auth0_id');
+            $table->string('google_id')->nullable()->unique();
+            $table->string('facebook_id')->nullable()->unique();
+        });
+    }
 };

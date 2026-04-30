@@ -129,7 +129,7 @@ class SubscriptionManager
             'payer_last_name' => $payerLastName,
             'payer_identification_number' => $payerDocumentNumber,
             'payer_identification_type' => $payerDocumentType,
-            'description' => $plan['reason'] ?? 'Dinfy - ' . ($plan['name'] ?? ''),
+            'description' => $plan['reason'] ?? 'Dinfy - '.($plan['name'] ?? ''),
             'notification_url' => config('subscriptions.notification_url'),
         ]);
 
@@ -225,7 +225,6 @@ class SubscriptionManager
 
     private function syncCurrentSubscription(UserSubscription $subscription): ?UserSubscription
     {
-
 
         if (
             $subscription->mercado_pago_payment_id
@@ -365,7 +364,7 @@ class SubscriptionManager
     }
 
     /**
-     * @param array<int, int> $weights
+     * @param  array<int, int>  $weights
      */
     private function calculateCnpjCheckDigit(string $cnpj, array $weights): int
     {
@@ -382,7 +381,7 @@ class SubscriptionManager
 
     private function shouldExpireDueSubscription(?UserSubscription $subscription, ?Carbon $now = null): bool
     {
-        if (! $subscription || ! $subscription->status->canExpire() || !$subscription->next_payment_at) {
+        if (! $subscription || ! $subscription->status->canExpire() || ! $subscription->next_payment_at) {
             return false;
         }
 
@@ -459,8 +458,6 @@ class SubscriptionManager
         }
     }
 
-
-
     public function cancelCurrent(User $user): UserSubscription
     {
         Log::info('2. Entrou em SubscriptionManager@cancelCurrent', [
@@ -482,7 +479,6 @@ class SubscriptionManager
         if ($subscription->status === SubscriptionStatus::Pending) {
             return $this->cancelPendingSubscription($subscription);
         }
-
 
         return $this->cancelLocalStandaloneSubscription($subscription);
     }
@@ -614,8 +610,6 @@ class SubscriptionManager
 
         $subscription = $this->applyPaymentPayload($subscription, $payload, $paymentId);
 
-
-
         return $subscription;
     }
 
@@ -737,7 +731,6 @@ class SubscriptionManager
         $nextPaymentAt = $subscription->next_payment_at;
         $canceledAt = $subscription->canceled_at;
 
-
         if (in_array(strtolower($paymentStatus), self::PAYMENT_APPROVED_STATUSES, true) && $approvedAt) {
             $startedAt = $approvedAt;
         }
@@ -816,7 +809,7 @@ class SubscriptionManager
     private function splitPayerName(?string $fullName): array
     {
         $parts = preg_split('/\s+/', trim((string) $fullName)) ?: [];
-        $parts = array_values(array_filter($parts, fn(string $part): bool => $part !== ''));
+        $parts = array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
 
         if ($parts === []) {
             return [null, null];

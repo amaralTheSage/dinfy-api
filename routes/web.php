@@ -2,7 +2,6 @@
 
 use App\Services\Subscriptions\SubscriptionCatalog;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -39,57 +38,54 @@ Route::post('/create-payer-test', function (Request $request) {
         'city' => 'required',
     ]);
 
-    $body = array_merge([$body, ['statementActivated' => true]]);
+    $body = array_merge($body, ['statementActivated' => true]);
 
-    $api_url = env('OPENFINANCE_API_URL') . 'payer';
+    $api_url = config('openfinance.url') . 'payer';
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
 
     $data = $response->json();
 
-    if ($data['errors']['internalCode']) {
+    if ($data['errors']['internalCode'] ?? null) {
         Log::debug($data['errors']['internalCode']);
     }
 
     $headersWithPayer = $body['cpfCnpj'] ? array_merge($headers, ['payercpfcnpj' => $body['cpfCnpj']]) : throw new Exception('ERROR WHEN CREATING PAYER: CPF/CNPJ is required for the next step. Payer probably was not created successfully.');
 
-
     if (($data['errors']['internalCode'] ?? null) == 7632) {
         Log::debug('Hit internal code 7632');
-
 
         $response = Http::withHeaders($headersWithPayer)->put($api_url, ['statementActivated' => true]);
     }
 
-    Log::info('Response' . $response);
-
+    Log::info('Response', $response->json());
 
     return redirect()->back()->with(['response' => $response->json()]);
 })->name('openfinance.create_payer');
 
-
 Route::post('/create-account-test', function (Request $request) {
 
-    Log::info('CREATE ACCOUNT: ' .  $request);
+    Log::debug('CREATE ACCOUNT: ', $request->all());
 
     $body = $request->validate([
-        'bankCode' => "string|required|max:3",
-        'agency' =>  "string|required|max:3",
-        'agencyDigit' => "string|optional|max:2",
-        'accountNumber' => "string|required|max:12",
+        'cpfCnpj' => 'required|string',
+        'bankCode' => 'string|required|max:3',
+        'agency' => 'string|required|max:4',
+        'agencyDigit' => 'string|nullable|max:2',
+        'accountNumber' => 'string|required|max:12',
     ]);
 
-    $body = array_merge([$body, ['statementActivated' => true]]);
+    $body = array_merge($body, ['statementActivated' => true]);
 
+    $headers = $request->validate(['tokensh' => 'required', 'cnpjsh' => 'required']);
 
     $headers = $body['cpfCnpj'] ? array_merge($headers, ['payercpfcnpj' => $body['cpfCnpj']]) : throw new Exception('error when creating **ACCOUNT**: CPF/CNPJ is required for the next step. Payer probably was not created successfully.');
 
-    $api_url = env('OPENFINANCE_API_URL') . 'account';
+    $api_url = config('openfinance.url') . 'account';
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
 
-    return redirect()->back()->with(['response_account' => $response]);
-
+    return redirect()->back()->with(['response_account' => $response->json()]);
 
     //  # passo 2: Criar conta
     // Método:
