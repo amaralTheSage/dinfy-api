@@ -65,7 +65,7 @@ Route::post('/create-payer-test', function (Request $request) {
 
 Route::post('/create-account-test', function (Request $request) {
 
-    Log::debug('CREATE ACCOUNT: ', $request->all());
+    Log::debug('CREATE ACCOUNT **REQUEST: ', $request->all());
 
     $body = $request->validate([
         'cpfCnpj' => 'required|string',
@@ -84,6 +84,8 @@ Route::post('/create-account-test', function (Request $request) {
     $api_url = config('openfinance.url') . 'account';
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
+
+    Log::debug('CREATE ACCOUNT **RESPONSE: ', $response->json());
 
     return redirect()->back()->with(['response_account' => $response->json()]);
 

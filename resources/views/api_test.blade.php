@@ -163,6 +163,9 @@
         } else {
                 console.error('CPF/CNPJ input or hidden field not found:', { source, target });
         }
+
+        console.log('Response:', @json(session('response')));
+        console.log('Response Account:', @json(session('response_account')));
     </script>
 
 </body>
