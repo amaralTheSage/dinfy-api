@@ -26,7 +26,7 @@ Route::get('/test-of', function () {
 Route::post('/create-payer-test', function (Request $request) {
     Log::info($request);
 
-    $headers = $request->validate(['tokensh' => 'required', 'cnpjsh' => 'required']);
+    $headers = ['tokensh' => config('openfinance.tokensh'), 'cnpjsh' => config('openfinance.cnpjsh')];
 
     $body = $request->validate([
         'name' => 'required',
@@ -77,7 +77,7 @@ Route::post('/create-account-test', function (Request $request) {
 
     $body = array_merge($body, ['statementActivated' => true]);
 
-    $headers = $request->validate(['tokensh' => 'required', 'cnpjsh' => 'required']);
+    $headers = ['tokensh' => config('openfinance.tokensh'), 'cnpjsh' => config('openfinance.cnpjsh')];
 
     $headers = $body['cpfCnpj'] ? array_merge($headers, ['payercpfcnpj' => $body['cpfCnpj']]) : throw new Exception('error when creating **ACCOUNT**: CPF/CNPJ is required for the next step. Payer probably was not created successfully.');
 

@@ -23,22 +23,6 @@
                     @csrf
 
                     <div>
-                        <h2>Auth Headers</h2>
-
-                        <div>
-                            <div>
-                                <label for="tokensh">tokensh</label>
-                                <input type="text" id="tokensh" name="tokensh" value="{{ config('openfinance.tokensh') }}">
-                            </div>
-
-                            <div>
-                                <label for="cnpjsh">cnpjsh</label>
-                                <input type="text" id="cnpjsh" name="cnpjsh" value="{{ config('openfinance.cnpjsh') }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
                         <h2>Request Body</h2>
 
                         <div>
@@ -100,23 +84,10 @@
 
                     @include('bank_dropdown')
 
-                       <div>
-                        <h2>Auth Headers</h2>
-
-                        <div>
-                            <div>
-                                <label for="tokensh">tokensh</label>
-                                <input type="text" name="tokensh" value="{{ config('openfinance.tokensh') }}">
-                            </div>
-
-                            <div>
-                                <label for="cnpjsh">cnpjsh</label>
-                                <input type="text"  name="cnpjsh" value="{{ config('openfinance.cnpjsh') }}">
-                            </div>
-                        </div>
+                    <div>
+                        <label for="cpfCnpjAccount">CPF / CNPJ</label>
+                        <input type="text" id="cpfCnpjAccount" name="cpfCnpj" readonly>
                     </div>
-
-                    <input type="hidden" id="cpfCnpjHidden" name="cpfCnpj" value=""/>
 
                      <div>
         <label for="agency">Agency</label>
@@ -154,15 +125,23 @@
 
     <script>
         const source = document.getElementById('cpfCnpj');
-        const target = document.getElementById('cpfCnpjHidden');
+        const target = document.getElementById('cpfCnpjAccount');
 
-        if (source && target) {
-            const sync = () => target.value = source.value;
-            sync();
+        const sync = () => {
+            if (target) {
+                target.value = source.value;
+            }
+        };
+
+        // Sync on input change
+        if (source) {
             source.addEventListener('input', sync);
-        } else {
-                console.error('CPF/CNPJ input or hidden field not found:', { source, target });
         }
+
+        // Also sync on page load/visibility change in case the form appears after initial load
+        document.addEventListener('visibilitychange', sync);
+        setTimeout(sync, 100);
+        setTimeout(sync, 500);
 
         // Log responses after page fully renders
         setTimeout(() => {
