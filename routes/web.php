@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Validator;
 
 Route::get('/check', function (SubscriptionCatalog $catalog) {
     return response()->json([
@@ -67,7 +68,7 @@ Route::post('/create-account-test', function (Request $request) {
 
     Log::debug('CREATE ACCOUNT **REQUEST: ', $request->all());
 
-    $body = $request->validate([
+    $validator = Validator::make($request->all(), [
         'cpfCnpj' => 'required|string',
         'bankCode' => 'string|required|max:3',
         'agency' => 'string|required|max:4',
@@ -75,7 +76,13 @@ Route::post('/create-account-test', function (Request $request) {
         'accountNumber' => 'string|required|max:12',
     ]);
 
-    $body = array_merge($body, ['statementActivated' => true]);
+    if ($validator->fails()) {
+        Log::debug('CREATE ACCOUNT **VALIDATION ERRORS: ', $validator->errors()->toArray());
+
+        return redirect()->back()->withErrors($validator)->withInput();
+    }
+
+    $body = $validator->validated();
 
     $headers = ['tokensh' => config('openfinance.tokensh'), 'cnpjsh' => config('openfinance.cnpjsh')];
 
@@ -83,7 +90,16 @@ Route::post('/create-account-test', function (Request $request) {
 
     $api_url = config('openfinance.url') . 'account';
 
-    $response = Http::withHeaders($headers)->post($api_url, $body);
+    $account = [
+        'bankCode' => $body['bankCode'],
+        'agency' => $body['agency'],
+        'agencyDigit' => $body['agencyDigit'] ?? '',
+        'accountNumber' => $body['accountNumber'],
+    ];
+
+    Log::debug('CREATE ACCOUNT **PAYLOAD: ', [$account]);
+
+    $response = Http::withHeaders($headers)->acceptJson()->post($api_url, [$account]);
 
     Log::debug('CREATE ACCOUNT **RESPONSE STATUS: ', ['status' => $response->status()]);
     Log::debug('CREATE ACCOUNT **RESPONSE BODY: ', ['body' => $response->body()]);

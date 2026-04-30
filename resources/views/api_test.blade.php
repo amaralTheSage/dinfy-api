@@ -5,122 +5,170 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Tecnospeed Payer Setup</title>
+    <title>Tecnospeed Open Finance Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 32px;
+        }
+
+        .forms,
+        .fields {
+            display: flex;
+            gap: 16px;
+        }
+
+        .forms > div,
+        .field {
+            flex: 1;
+        }
+
+        .fields {
+            flex-wrap: wrap;
+        }
+
+        .field {
+            min-width: 180px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        input,
+        select,
+        button {
+            box-sizing: border-box;
+            padding: 8px;
+            width: 100%;
+        }
+
+        button {
+            margin-top: 16px;
+        }
+
+        pre {
+            border: 1px solid #ddd;
+            overflow: auto;
+            padding: 12px;
+        }
+
+        .error {
+            color: #b00020;
+        }
+    </style>
 </head>
 
 <body>
+    <p>API Endpoint</p>
+    <h1>{{ config('openfinance.url') }}</h1>
 
-    <div>
+    @if ($errors->any())
+        <div class="error">
+            <strong>Validation errors:</strong>
+            <ul>
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="forms">
         <div>
-            <p>API Endpoint</p>
-            <h1>{{ config('openfinance.url') }}payer</h1>
+            <form action="{{ route('openfinance.create_payer') }}" method="POST">
+                @csrf
+
+                <h2>Create Payer</h2>
+
+                <div class="fields">
+                    <div class="field">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" value="{{ old('name', 'CNPJ PARA TESTES') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="cpfCnpj">CPF / CNPJ</label>
+                        <input type="text" id="cpfCnpj" name="cpfCnpj" value="{{ old('cpfCnpj', '01001001000113') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="zipcode">Zipcode</label>
+                        <input type="text" id="zipcode" name="zipcode" value="{{ old('zipcode', '87020025') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="neighborhood">Neighborhood</label>
+                        <input type="text" id="neighborhood" name="neighborhood" value="{{ old('neighborhood', 'DUQUE DE CAXIAS') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="addressNumber">Number</label>
+                        <input type="text" id="addressNumber" name="addressNumber" value="{{ old('addressNumber', '882') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="city">City</label>
+                        <input type="text" id="city" name="city" value="{{ old('city', 'MARINGA') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="state">State</label>
+                        <input type="text" id="state" name="state" value="{{ old('state', 'PR') }}">
+                    </div>
+                </div>
+
+                <button type="submit">Create Payer</button>
+            </form>
+
+            @if (session('response'))
+                <h3>Payer API Response:</h3>
+                <pre>{{ json_encode(session('response'), JSON_PRETTY_PRINT) }}</pre>
+            @endif
         </div>
 
         <div>
-            <div>
-                <form action="{{ route('openfinance.create_payer') }}" method="POST">
-                    @method('POST')
-                    @csrf
+            <form method="POST" action="{{ route('openfinance.create_account') }}">
+                @csrf
 
-                    <div>
-                        <h2>Request Body</h2>
+                <h2>Create Account</h2>
 
-                        <div>
-                            <div>
-                                <label for="name">Name</label>
-                                <input type="text" id="name" name="name" value="CNPJ PARA TESTES">
-                            </div>
-
-                            <div>
-                                <label for="cpfCnpj">CPF / CNPJ</label>
-                                <input type="text" id="cpfCnpj" name="cpfCnpj" value="01001001000113">
-                            </div>
-
-                            <div>
-                                <label for="zipcode">Zipcode</label>
-                                <input type="text" id="zipcode" name="zipcode" value="87020025">
-                            </div>
-
-                            <div>
-                                <label for="neighborhood">Neighborhood</label>
-                                <input type="text" id="neighborhood" name="neighborhood" value="DUQUE DE CAXIAS">
-                            </div>
-
-                            <div>
-                                <label for="addressNumber">Number</label>
-                                <input type="text" id="addressNumber" name="addressNumber" value="882">
-                            </div>
-
-                            <div>
-                                <label for="city">City</label>
-                                <input type="text" id="city" name="city" value="MARINGA">
-                            </div>
-
-                            <div>
-                                <label for="state">State</label>
-                                <input type="text" id="state" name="state" value="PR">
-                            </div>
-
-                       
-                        </div>
-
-                        <div>
-                            <button type="submit">Create Payer</button>
-                        </div>
+                <div class="fields">
+                    <div class="field">
+                        <label for="bankCode">Bank</label>
+                        @include('bank_dropdown')
                     </div>
-                </form>
-            </div>
 
-            @if (session('response'))
-                <div>
-                    <h3>Payer API Response:</h3>
-                    <pre>{{ json_encode(session('response'), JSON_PRETTY_PRINT) }}</pre>
-                </div>
-
-
-        <form method='POST' action="{{ route('openfinance.create_account') }}">
-                    @method('POST')
-                    @csrf
-
-                    @include('bank_dropdown')
-
-                    <div>
+                    <div class="field">
                         <label for="cpfCnpjAccount">CPF / CNPJ</label>
-                        <input type="text" id="cpfCnpjAccount" name="cpfCnpj" readonly>
+                        <input type="text" id="cpfCnpjAccount" name="cpfCnpj" value="{{ old('cpfCnpj', '01001001000113') }}">
                     </div>
 
-                     <div>
-        <label for="agency">Agency</label>
-        <input type="text" id="agency" name="agency">
-    </div>
-    <div>
-        <label for="agencyDigit">Agency Digit (Opcional)</label>
-        <input type="text" id="agencyDigit" name="agencyDigit">
-    </div>
-    <div>
-        <label for="accountNumber">Account Number</label>
-        <input type="text" id="accountNumber" name="accountNumber">
-    </div>
+                    <div class="field">
+                        <label for="agency">Agency</label>
+                        <input type="text" id="agency" name="agency" value="{{ old('agency') }}">
+                    </div>
 
-    <button type="submit">Create Account</button>
-                </form>
+                    <div class="field">
+                        <label for="agencyDigit">Agency Digit</label>
+                        <input type="text" id="agencyDigit" name="agencyDigit" value="{{ old('agencyDigit') }}">
+                    </div>
 
-
-
-            @endif
-            
-            
-        
-
-
-        @if (session('response_account'))
-                <div>
-                    <h3>Account API Response:</h3>
-                    <pre>{{ json_encode(session('response_account'), JSON_PRETTY_PRINT) }}</pre>
+                    <div class="field">
+                        <label for="accountNumber">Account Number</label>
+                        <input type="text" id="accountNumber" name="accountNumber" value="{{ old('accountNumber') }}">
+                    </div>
                 </div>
 
-        @endif
-</div>
+                <button type="submit">Create Account</button>
+            </form>
+
+            @if (session('response_account'))
+                <h3>Account API Response:</h3>
+                <pre>{{ json_encode(session('response_account'), JSON_PRETTY_PRINT) }}</pre>
+            @endif
+        </div>
     </div>
 
     <script>
@@ -128,28 +176,13 @@
         const target = document.getElementById('cpfCnpjAccount');
 
         const sync = () => {
-            if (target) {
+            if (source && target) {
                 target.value = source.value;
             }
         };
 
-        // Sync on input change
-        if (source) {
-            source.addEventListener('input', sync);
-        }
-
-        // Also sync on page load/visibility change in case the form appears after initial load
-        document.addEventListener('visibilitychange', sync);
-        setTimeout(sync, 100);
-        setTimeout(sync, 500);
-
-        // Log responses after page fully renders
-        setTimeout(() => {
-            console.log('Response:', @json(session('response')));
-            console.log('Response Account:', @json(session('response_account')));
-        }, 100);
+        source?.addEventListener('input', sync);
     </script>
-
 </body>
 
 </html>

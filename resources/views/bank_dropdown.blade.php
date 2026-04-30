@@ -1,4 +1,4 @@
-<select name="banco" id="banco">
+<select name="bankCode" id="bankCode">
     <option value="">Selecione um banco</option>
     <option value="341">Itaú</option>
     <option value="237">Bradesco</option>
