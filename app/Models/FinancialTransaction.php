@@ -32,6 +32,8 @@ class FinancialTransaction extends Model
      */
     protected $fillable = [
         'id',
+        'provider',
+        'provider_transaction_id',
         'user_id',
         'account_id',
         'type',

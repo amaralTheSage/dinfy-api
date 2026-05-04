@@ -45,6 +45,18 @@ class FinancialAccount extends Model
         'currency',
         'credit_data',
         'data',
+        'openfinance_account_hash',
+        'openfinance_id',
+        'openfinance_link',
+        'openfinance_status',
+        'openfinance_synced_at',
+        'openfinance_last_statement_unique_id',
+        'openfinance_statement_status',
+        'openfinance_statement_error',
+        'openfinance_last_statement_requested_at',
+        'openfinance_last_statement_checked_at',
+        'openfinance_last_statement_result_at',
+        'openfinance_next_statement_at',
     ];
 
     /**
@@ -54,6 +66,11 @@ class FinancialAccount extends Model
         'balance' => 'decimal:2',
         'credit_data' => 'array',
         'data' => 'array',
+        'openfinance_synced_at' => 'datetime',
+        'openfinance_last_statement_requested_at' => 'datetime',
+        'openfinance_last_statement_checked_at' => 'datetime',
+        'openfinance_last_statement_result_at' => 'datetime',
+        'openfinance_next_statement_at' => 'datetime',
     ];
 
     protected static function booted(): void

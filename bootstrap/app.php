@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureAssistantSecret;
 use App\Jobs\ExpireOverdueSubscriptionsJob;
+use App\Jobs\SyncOpenFinanceStatementsJob;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,6 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
             ->call(fn () => ExpireOverdueSubscriptionsJob::dispatchSync())
             ->name('subscriptions:expire-overdue-daily')
             ->daily()
+            ->withoutOverlapping();
+
+        $schedule
+            ->call(fn () => SyncOpenFinanceStatementsJob::dispatchSync())
+            ->name('openfinance:sync-statements-hourly')
+            ->hourly()
             ->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {

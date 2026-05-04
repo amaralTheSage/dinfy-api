@@ -8,6 +8,7 @@ use App\Http\Controllers\FinancialBudgetController;
 use App\Http\Controllers\FinancialTransactionController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\MercadoPagoWebhookController;
+use App\Http\Controllers\OpenFinanceController;
 use App\Http\Controllers\SubscriptionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -44,6 +45,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/subscriptions/current/cancel', [SubscriptionController::class, 'cancel']);
 
     Route::apiResource('accounts', FinancialAccountController::class);
+
+    Route::prefix('openfinance')->group(function () {
+        Route::post('/connect', [OpenFinanceController::class, 'connect']);
+        Route::get('/accounts/{account}/remote', [OpenFinanceController::class, 'showRemoteAccount']);
+    });
 
     Route::apiResource('transactions', FinancialTransactionController::class)->only([
         'index',

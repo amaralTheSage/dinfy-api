@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Auth\WorkosAuthService;
+use App\Support\BrazilDocument;
 use App\Support\PhoneNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -35,6 +36,17 @@ class MeController extends Controller
                 'string',
                 'max:30',
             ],
+            'cpfCnpj' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:20',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value !== null && trim((string) $value) !== '' && ! BrazilDocument::isValid((string) $value)) {
+                        $fail('Informe um CPF/CNPJ valido.');
+                    }
+                },
+            ],
         ]);
 
         if (array_key_exists('phone', $validated)) {
@@ -42,6 +54,11 @@ class MeController extends Controller
             $validated['phone'] = $phone !== '' ? $phone : null;
             $validated['phone_normalized'] = PhoneNormalizer::normalize($validated['phone']);
             $this->ensurePhoneIsAvailable($validated['phone_normalized'], $user->id);
+        }
+
+        if (array_key_exists('cpfCnpj', $validated)) {
+            $validated['cpf_cnpj'] = BrazilDocument::normalize($validated['cpfCnpj']);
+            $this->ensureCpfCnpjIsAvailable($validated['cpf_cnpj'], $user->id);
         }
 
         $workosAttributes = array_filter([
@@ -69,6 +86,9 @@ class MeController extends Controller
                 'phone' => $validated['phone'],
                 'phone_normalized' => $validated['phone_normalized'],
             ]);
+        }
+        if (array_key_exists('cpf_cnpj', $validated)) {
+            $user->cpf_cnpj = $validated['cpf_cnpj'];
         }
 
         $user->save();
@@ -179,6 +199,24 @@ class MeController extends Controller
         if ($exists) {
             throw ValidationException::withMessages([
                 'phone' => ['Este telefone já está em uso.'],
+            ]);
+        }
+    }
+
+    private function ensureCpfCnpjIsAvailable(?string $cpfCnpj, int $ignoreUserId): void
+    {
+        if (! $cpfCnpj) {
+            return;
+        }
+
+        $exists = User::query()
+            ->whereKeyNot($ignoreUserId)
+            ->where('cpf_cnpj', $cpfCnpj)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'cpfCnpj' => ['Este CPF/CNPJ ja esta em uso.'],
             ]);
         }
     }

@@ -141,3 +141,27 @@ test('it syncs profile email and name changes to WorkOS', function () {
     expect($user->email)->toBe('new@example.com');
     expect($user->email_verified_at)->toBeNull();
 });
+
+test('it validates and stores cpf cnpj on profile update', function () {
+    $user = User::factory()->create([
+        'cpf_cnpj' => null,
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->putJson('/api/me', [
+        'cpfCnpj' => '529.982.247-25',
+    ])
+        ->assertOk()
+        ->assertJsonPath('cpf_cnpj', '52998224725');
+
+    $user->refresh();
+
+    expect($user->cpf_cnpj)->toBe('52998224725');
+
+    $this->putJson('/api/me', [
+        'cpfCnpj' => '111.111.111-11',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('cpfCnpj');
+});

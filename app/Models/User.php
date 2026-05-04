@@ -29,6 +29,7 @@ class User extends Authenticatable
         'workos_user_id',
         'phone',
         'phone_normalized',
+        'cpf_cnpj',
         'whatsapp_phone',
         'whatsapp_phone_normalized',
         'whatsapp_opted_in_at',
