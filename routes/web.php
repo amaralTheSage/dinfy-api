@@ -74,6 +74,7 @@ Route::post('/create-account-test', function (Request $request) {
         'agency' => 'string|required|max:4',
         'agencyDigit' => 'string|nullable|max:2',
         'accountNumber' => 'string|required|max:12',
+        'accountNumberDigit' => 'string|nullable|max:2',
     ]);
 
     if ($validator->fails()) {
@@ -95,14 +96,12 @@ Route::post('/create-account-test', function (Request $request) {
         'agency' => $body['agency'],
         'agencyDigit' => $body['agencyDigit'] ?? '',
         'accountNumber' => $body['accountNumber'],
+        'accountNumberDigit' => $body['accountNumberDigit'] ?? '',
+        'statementActived' => true,
     ];
-
     Log::debug('CREATE ACCOUNT **PAYLOAD: ', [$account]);
 
     $response = Http::withHeaders($headers)->acceptJson()->post($api_url, [$account]);
-
-    Log::debug('CREATE ACCOUNT **RESPONSE STATUS: ', ['status' => $response->status()]);
-    Log::debug('CREATE ACCOUNT **RESPONSE BODY: ', ['body' => $response->body()]);
 
     $responseData = $response->json() ?? $response->body();
 

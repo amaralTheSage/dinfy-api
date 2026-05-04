@@ -159,6 +159,11 @@
                         <label for="accountNumber">Account Number</label>
                         <input type="text" id="accountNumber" name="accountNumber" value="{{ old('accountNumber') }}">
                     </div>
+
+                    <div class="field">
+                        <label for="accountNumberDigit">Account Number Digit</label>
+                        <input type="text" id="accountNumberDigit" name="accountNumberDigit" value="{{ old('accountNumberDigit') }}">
+                    </div>
                 </div>
 
                 <button type="submit">Create Account</button>
