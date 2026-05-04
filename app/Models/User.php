@@ -7,6 +7,7 @@ use App\Notifications\PasswordResetTokenNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -69,6 +70,16 @@ class User extends Authenticatable
     public function financialAccounts(): HasMany
     {
         return $this->hasMany(FinancialAccount::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
+    public function openFinanceAddress(): HasOne
+    {
+        return $this->hasOne(UserAddress::class)->where('type', 'openfinance');
     }
 
     public function financialTransactions(): HasMany

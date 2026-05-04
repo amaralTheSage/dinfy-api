@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FinancialAccount;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Support\BrazilDocument;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response as ClientResponse;
@@ -17,6 +18,27 @@ class OpenFinanceController extends Controller
 {
     private const PAYER_ALREADY_EXISTS_INTERNAL_CODE = 7632;
 
+    private const ADDRESS_TYPE = 'openfinance';
+
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $accounts = FinancialAccount::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('openfinance_account_hash')
+            ->orderByDesc('openfinance_synced_at')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (FinancialAccount $account): array => $this->accountSummary($account))
+            ->values();
+
+        return response()->json([
+            'cpfCnpj' => $user->cpf_cnpj,
+            'address' => $this->addressForResponse($user->openFinanceAddress()->first()),
+            'accounts' => $accounts,
+        ]);
+    }
+
     public function connect(Request $request): JsonResponse
     {
         if ($response = $this->configurationProblem()) {
@@ -26,6 +48,7 @@ class OpenFinanceController extends Controller
         $validated = $this->validateConnectRequest($request);
         $user = $request->user();
         $document = $this->resolveUserDocument($user, $validated['cpfCnpj'] ?? null);
+        $address = $this->storeOpenFinanceAddress($user, $validated);
 
         $payerPayload = $this->payerPayload($user, $document, $validated);
         $accountPayload = $this->accountPayload($validated);
@@ -112,7 +135,8 @@ class OpenFinanceController extends Controller
         return response()->json([
             'message' => 'Conta Open Finance criada. Abra o link para autorizar no banco.',
             'warning' => 'A liberacao pelo banco pode levar ate 24 horas. Depois disso, as atualizacoes acontecem em segundo plano e nao sao imediatas.',
-            'account' => $account,
+            'account' => $this->accountSummary($account),
+            'address' => $this->addressForResponse($address),
             'accountHash' => $accountHash,
             'openfinanceLink' => $account->openfinance_link,
         ], 201);
@@ -331,6 +355,66 @@ class OpenFinanceController extends Controller
         }
 
         return $document;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function storeOpenFinanceAddress(User $user, array $validated): UserAddress
+    {
+        $address = UserAddress::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'type' => self::ADDRESS_TYPE,
+            ],
+            $this->addressAttributes($validated),
+        );
+
+        Log::info('OpenFinance address stored.', [
+            'user_id' => $user->id,
+            'address_id' => $address->id,
+            'state' => $address->state,
+            'city' => $address->city,
+        ]);
+
+        return $address;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function addressAttributes(array $validated): array
+    {
+        return [
+            'zipcode' => preg_replace('/\D+/', '', (string) $validated['zipcode']),
+            'street' => $this->nullableTrim($validated['street'] ?? null),
+            'neighborhood' => trim((string) $validated['neighborhood']),
+            'address_number' => trim((string) $validated['addressNumber']),
+            'address_complement' => $this->nullableTrim($validated['addressComplement'] ?? null),
+            'state' => strtoupper(trim((string) $validated['state'])),
+            'city' => trim((string) $validated['city']),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function addressForResponse(?UserAddress $address): ?array
+    {
+        if ($address === null) {
+            return null;
+        }
+
+        return [
+            'zipcode' => $address->zipcode,
+            'street' => $address->street,
+            'neighborhood' => $address->neighborhood,
+            'addressNumber' => $address->address_number,
+            'addressComplement' => $address->address_complement,
+            'state' => $address->state,
+            'city' => $address->city,
+        ];
     }
 
     private function ensureCpfCnpjIsAvailable(string $cpfCnpj, int $ignoreUserId): void
@@ -587,6 +671,28 @@ class OpenFinanceController extends Controller
         return $account->refresh();
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function accountSummary(FinancialAccount $account): array
+    {
+        return [
+            'id' => $account->id,
+            'name' => $account->name,
+            'bankCode' => data_get($account->data, 'openfinance.bankCode'),
+            'bankName' => data_get($account->data, 'openfinance.bankName') ?: $account->marketing_name ?: $account->name,
+            'numberLast4' => $account->number_last4,
+            'balance' => $account->balance,
+            'currency' => $account->currency,
+            'openfinanceStatus' => $account->openfinance_status,
+            'statementStatus' => $account->openfinance_statement_status,
+            'statementError' => $account->openfinance_statement_error,
+            'openfinanceLink' => $account->openfinance_link,
+            'syncedAt' => $account->openfinance_synced_at?->toIso8601String(),
+            'nextStatementAt' => $account->openfinance_next_statement_at?->toIso8601String(),
+        ];
+    }
+
     private function resolveOpenFinanceAccount(Request $request, string $accountId): FinancialAccount
     {
         $account = FinancialAccount::query()
@@ -629,6 +735,13 @@ class OpenFinanceController extends Controller
             $values,
             static fn (mixed $value): bool => $value !== null && $value !== '',
         );
+    }
+
+    private function nullableTrim(mixed $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function compactLogBody(mixed $body): mixed

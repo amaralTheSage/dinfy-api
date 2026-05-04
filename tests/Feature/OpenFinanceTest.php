@@ -3,6 +3,7 @@
 use App\Models\FinancialAccount;
 use App\Models\FinancialTransaction;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Services\OpenFinance\OpenFinanceStatementSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -64,6 +65,15 @@ it('creates the payer and account through TecnoSpeed and stores the account hash
         'openfinance_status' => 'authorization_pending',
         'number_last4' => '5678',
     ]);
+    $this->assertDatabaseHas('user_addresses', [
+        'user_id' => $user->id,
+        'type' => 'openfinance',
+        'zipcode' => '87020025',
+        'neighborhood' => 'Centro',
+        'address_number' => '123',
+        'state' => 'PR',
+        'city' => 'Maringa',
+    ]);
 
     Http::assertSent(function (HttpRequest $request): bool {
         return $request->url() === 'https://tecnospeed.test/api/v1/account'
@@ -71,6 +81,47 @@ it('creates the payer and account through TecnoSpeed and stores the account hash
             && $request[0]['statementActived'] === true
             && $request[0]['accountPayment'] === false;
     });
+});
+
+it('returns saved Open Finance address and connected accounts for the home screen', function () {
+    $user = User::factory()->create([
+        'cpf_cnpj' => '52998224725',
+    ]);
+    UserAddress::query()->create([
+        'user_id' => $user->id,
+        'type' => 'openfinance',
+        'zipcode' => '87020025',
+        'street' => 'Rua Teste',
+        'neighborhood' => 'Centro',
+        'address_number' => '123',
+        'address_complement' => 'Sala 4',
+        'state' => 'PR',
+        'city' => 'Maringa',
+    ]);
+    FinancialAccount::query()->create([
+        'user_id' => $user->id,
+        'type' => 'bank',
+        'subtype' => 'openfinance',
+        'name' => 'Nubank',
+        'marketing_name' => 'Nubank',
+        'number_last4' => '5678',
+        'balance' => 0,
+        'currency' => 'BRL',
+        'data' => ['openfinance' => ['bankCode' => '260', 'bankName' => 'Nubank']],
+        'openfinance_account_hash' => 'nubank-hash-123',
+        'openfinance_status' => 'authorization_pending',
+    ]);
+
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/openfinance')
+        ->assertOk()
+        ->assertJsonPath('cpfCnpj', '52998224725')
+        ->assertJsonPath('address.zipcode', '87020025')
+        ->assertJsonPath('address.addressNumber', '123')
+        ->assertJsonPath('accounts.0.bankCode', '260')
+        ->assertJsonPath('accounts.0.bankName', 'Nubank')
+        ->assertJsonPath('accounts.0.numberLast4', '5678');
 });
 
 it('updates an existing payer when TecnoSpeed reports the payer already exists', function () {

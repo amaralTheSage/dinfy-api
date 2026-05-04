@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('accounts', FinancialAccountController::class);
 
     Route::prefix('openfinance')->group(function () {
+        Route::get('/', [OpenFinanceController::class, 'index']);
         Route::post('/connect', [OpenFinanceController::class, 'connect']);
         Route::get('/accounts/{account}/remote', [OpenFinanceController::class, 'showRemoteAccount']);
     });
