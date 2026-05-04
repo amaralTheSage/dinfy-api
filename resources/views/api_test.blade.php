@@ -18,9 +18,18 @@
             gap: 16px;
         }
 
+        .forms {
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
         .forms > div,
         .field {
             flex: 1;
+        }
+
+        .forms > div {
+            min-width: 320px;
         }
 
         .fields {
@@ -75,7 +84,17 @@
         </div>
     @endif
 
+    {{-- Fluxo de teste Open Finance/Tecnospeed:
+        1. Criar payer.
+        2. Criar conta para esse payer e abrir o openfinanceLink retornado.
+        3. Depois de o usuário aprovar a conexão, gerar um protocolo de extrato.
+        4. Consultar o protocolo pelo uniqueId para obter movimentos, duplicados e saldo.
+    --}}
     <div class="forms">
+        {{-- Passo 1: cadastra o pagador na Tecnospeed.
+            A resposta pode criar o payer ou reativar statement caso a Tecnospeed retorne internalCode 7632.
+            O CPF/CNPJ daqui é usado nos headers payercpfcnpj dos passos seguintes.
+        --}}
         <div>
             <form action="{{ route('openfinance.create_payer') }}" method="POST">
                 @csrf
@@ -128,6 +147,11 @@
             @endif
         </div>
 
+        {{-- Passo 2: cadastra uma conta bancária para o payer.
+            A resposta retorna accountHash e openfinanceLink.
+            O usuário precisa acessar o openfinanceLink e aprovar a conexão; a ativação pode levar horas.
+            Guarde o accountHash para solicitar extratos depois.
+        --}}
         <div>
             <form method="POST" action="{{ route('openfinance.create_account') }}">
                 @csrf
@@ -174,15 +198,104 @@
                 <pre>{{ json_encode(session('response_account'), JSON_PRETTY_PRINT) }}</pre>
             @endif
         </div>
+
+        {{-- Passo 3: solicita o extrato Open Finance para uma conta já aprovada.
+            Esta chamada ainda não retorna movimentos; ela só retorna uniqueId/status PROCESSING.
+            Rate limit Tecnospeed informado na doc: 1 requisição de sucesso a cada 6 horas.
+        --}}
+        <div>
+            <form method="POST" action="{{ route('openfinance.create_statement_protocol') }}">
+                @csrf
+
+                <h2>Generate Statement Protocol</h2>
+
+                <div class="fields">
+                    <div class="field">
+                        <label for="cpfCnpjStatement">CPF / CNPJ</label>
+                        <input type="text" id="cpfCnpjStatement" name="cpfCnpj" value="{{ old('cpfCnpj', '01001001000113') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="accountHash">Account Hash</label>
+                        <input type="text" id="accountHash" name="accountHash" value="{{ old('accountHash', data_get(session('response_account'), 'accounts.0.accountHash')) }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="dateStart">Date Start</label>
+                        <input type="date" id="dateStart" name="dateStart" value="{{ old('dateStart', now()->subDays(7)->toDateString()) }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="dateEnd">Date End</label>
+                        <input type="date" id="dateEnd" name="dateEnd" value="{{ old('dateEnd', now()->toDateString()) }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="today">Today Only</label>
+                        <input type="checkbox" id="today" name="today" value="1" @checked(old('today'))>
+                    </div>
+                </div>
+
+                <button type="submit">Generate Protocol</button>
+            </form>
+
+            @if (session('response_statement_protocol'))
+                <h3>Statement Protocol Response:</h3>
+                <pre>{{ json_encode(session('response_statement_protocol'), JSON_PRETTY_PRINT) }}</pre>
+            @endif
+        </div>
+
+        {{-- Passo 4: consulta o resultado do processamento pelo uniqueId.
+            O endpoint remoto da Tecnospeed é GET /statement/openfinance/{uniqueId}.
+            Quando finalizado, a resposta traz statement, transaction, transactionDuplicated e balance.
+            Rate limit Tecnospeed informado na doc: 3 consultas por minuto, com cache de 1 hora.
+        --}}
+        <div>
+            <form method="POST" action="{{ route('openfinance.get_statement_result') }}">
+                @csrf
+
+                <h2>Get Statement Result</h2>
+
+                <div class="fields">
+                    <div class="field">
+                        <label for="cpfCnpjStatementResult">CPF / CNPJ</label>
+                        <input type="text" id="cpfCnpjStatementResult" name="cpfCnpj" value="{{ old('cpfCnpj', '01001001000113') }}">
+                    </div>
+
+                    <div class="field">
+                        <label for="uniqueId">Unique ID</label>
+                        <input type="text" id="uniqueId" name="uniqueId" value="{{ old('uniqueId', data_get(session('response_statement_protocol'), 'uniqueId')) }}">
+                    </div>
+                </div>
+
+                <button type="submit">Get Statement</button>
+            </form>
+
+            @if (session('response_statement_result'))
+                <h3>Statement Result Response:</h3>
+                <pre>{{ json_encode(session('response_statement_result'), JSON_PRETTY_PRINT) }}</pre>
+            @endif
+        </div>
     </div>
 
     <script>
+        // Mantém o CPF/CNPJ dos passos seguintes sincronizado com o payer do passo 1.
         const source = document.getElementById('cpfCnpj');
         const target = document.getElementById('cpfCnpjAccount');
+        const targetStatement = document.getElementById('cpfCnpjStatement');
+        const targetStatementResult = document.getElementById('cpfCnpjStatementResult');
 
         const sync = () => {
             if (source && target) {
                 target.value = source.value;
+            }
+
+            if (source && targetStatement) {
+                targetStatement.value = source.value;
+            }
+
+            if (source && targetStatementResult) {
+                targetStatementResult.value = source.value;
             }
         };
 
