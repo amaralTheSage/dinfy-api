@@ -165,3 +165,42 @@ test('it validates and stores cpf cnpj on profile update', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('cpfCnpj');
 });
+
+test('it stores and returns the open finance address on profile update', function () {
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $this->putJson('/api/me', [
+        'phone' => '(53) 99123-4567',
+        'address' => [
+            'zipcode' => '96015-420',
+            'street' => 'Rua Padre Anchieta',
+            'neighborhood' => 'Centro',
+            'addressNumber' => '4715',
+            'addressComplement' => 'Sala 2',
+            'state' => 'rs',
+            'city' => 'Pelotas',
+        ],
+    ])
+        ->assertOk()
+        ->assertJsonPath('phone', '(53) 99123-4567')
+        ->assertJsonPath('address.zipcode', '96015420')
+        ->assertJsonPath('address.addressNumber', '4715')
+        ->assertJsonPath('address.state', 'RS')
+        ->assertJsonPath('address.city', 'Pelotas');
+
+    $this->assertDatabaseHas('user_addresses', [
+        'user_id' => $user->id,
+        'type' => 'openfinance',
+        'zipcode' => '96015420',
+        'address_number' => '4715',
+        'state' => 'RS',
+        'city' => 'Pelotas',
+    ]);
+
+    $this->getJson('/api/me')
+        ->assertOk()
+        ->assertJsonPath('phone', '(53) 99123-4567')
+        ->assertJsonPath('address.street', 'Rua Padre Anchieta');
+});

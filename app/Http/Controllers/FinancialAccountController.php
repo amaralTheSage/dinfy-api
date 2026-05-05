@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FinancialAccount;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class FinancialAccountController extends Controller
 {
@@ -55,6 +56,12 @@ class FinancialAccountController extends Controller
             $existing = null;
         }
 
+        if ($existing) {
+            $this->ensureManualAccount($existing);
+        }
+
+        $this->ensureManualPayload($validated);
+
         $model = $existing ?? new FinancialAccount;
 
         if ($id && ! $existing) {
@@ -90,6 +97,8 @@ class FinancialAccountController extends Controller
             ->where('id', $account)
             ->firstOrFail();
 
+        $this->ensureManualAccount($model);
+
         $validated = $request->validate([
             'type' => ['sometimes', 'required', 'string', 'max:50'],
             'subtype' => ['sometimes', 'nullable', 'string', 'max:50'],
@@ -103,6 +112,8 @@ class FinancialAccountController extends Controller
             'creditData' => ['sometimes', 'nullable', 'array'],
             'data' => ['sometimes', 'nullable', 'array'],
         ]);
+
+        $this->ensureManualPayload($validated);
 
         if (array_key_exists('type', $validated)) {
             $model->type = $validated['type'];
@@ -152,8 +163,31 @@ class FinancialAccountController extends Controller
             ->where('id', $account)
             ->firstOrFail();
 
+        $this->ensureManualAccount($model);
+
         $model->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    private function ensureManualAccount(FinancialAccount $account): void
+    {
+        if (filled($account->openfinance_account_hash) || $account->subtype === 'openfinance') {
+            throw ValidationException::withMessages([
+                'account' => ['Contas Open Finance devem ser desconectadas pelo fluxo de Open Finance.'],
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function ensureManualPayload(array $validated): void
+    {
+        if (strtolower((string) ($validated['subtype'] ?? '')) === 'openfinance') {
+            throw ValidationException::withMessages([
+                'account' => ['Contas Open Finance devem ser criadas pelo fluxo de Open Finance.'],
+            ]);
+        }
     }
 }

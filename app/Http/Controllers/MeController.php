@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Services\Auth\WorkosAuthService;
 use App\Support\BrazilDocument;
 use App\Support\PhoneNormalizer;
@@ -16,6 +17,13 @@ use Illuminate\Validation\ValidationException;
 
 class MeController extends Controller
 {
+    private const ADDRESS_TYPE = 'openfinance';
+
+    public function show(Request $request)
+    {
+        return response()->json($this->userForResponse($request->user()));
+    }
+
     public function update(Request $request, WorkosAuthService $workosAuth)
     {
         $user = $request->user();
@@ -47,6 +55,14 @@ class MeController extends Controller
                     }
                 },
             ],
+            'address' => ['sometimes', 'nullable', 'array'],
+            'address.zipcode' => ['required_with:address', 'string', 'max:20'],
+            'address.street' => ['nullable', 'string', 'max:255'],
+            'address.neighborhood' => ['required_with:address', 'string', 'max:255'],
+            'address.addressNumber' => ['required_with:address', 'string', 'max:30'],
+            'address.addressComplement' => ['nullable', 'string', 'max:255'],
+            'address.state' => ['required_with:address', 'string', 'size:2'],
+            'address.city' => ['required_with:address', 'string', 'max:255'],
         ]);
 
         if (array_key_exists('phone', $validated)) {
@@ -93,7 +109,11 @@ class MeController extends Controller
 
         $user->save();
 
-        return response()->json($user);
+        if (array_key_exists('address', $validated) && is_array($validated['address'])) {
+            $this->storeOpenFinanceAddress($user, $validated['address']);
+        }
+
+        return response()->json($this->userForResponse($user->refresh()));
     }
 
     public function updateWhatsApp(Request $request)
@@ -219,6 +239,67 @@ class MeController extends Controller
                 'cpfCnpj' => ['Este CPF/CNPJ ja esta em uso.'],
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $address
+     */
+    private function storeOpenFinanceAddress(User $user, array $address): void
+    {
+        UserAddress::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'type' => self::ADDRESS_TYPE,
+            ],
+            [
+                'zipcode' => preg_replace('/\D+/', '', (string) $address['zipcode']),
+                'street' => $this->nullableTrim($address['street'] ?? null),
+                'neighborhood' => trim((string) $address['neighborhood']),
+                'address_number' => trim((string) $address['addressNumber']),
+                'address_complement' => $this->nullableTrim($address['addressComplement'] ?? null),
+                'state' => strtoupper(trim((string) $address['state'])),
+                'city' => trim((string) $address['city']),
+            ],
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function userForResponse(User $user): array
+    {
+        $payload = $user->toArray();
+        $payload['phone'] = $user->phone ?: $user->phone_normalized;
+        $payload['address'] = $this->addressForResponse($user->openFinanceAddress()->first());
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function addressForResponse(?UserAddress $address): ?array
+    {
+        if ($address === null) {
+            return null;
+        }
+
+        return [
+            'zipcode' => $address->zipcode,
+            'street' => $address->street,
+            'neighborhood' => $address->neighborhood,
+            'addressNumber' => $address->address_number,
+            'addressComplement' => $address->address_complement,
+            'state' => $address->state,
+            'city' => $address->city,
+        ];
+    }
+
+    private function nullableTrim(mixed $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function ensureWhatsAppPhoneIsAvailable(?string $phoneNormalized, int $ignoreUserId): void

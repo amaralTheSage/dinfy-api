@@ -44,9 +44,9 @@ Route::post('/create-payer-test', function (Request $request) {
         'city' => 'required',
     ]);
 
-    $body = array_merge($body, ['statementActivated' => true]);
+    $body = array_merge($body, ['statementActived' => true]);
 
-    $api_url = config('openfinance.url') . 'payer';
+    $api_url = config('openfinance.url').'payer';
 
     $response = Http::withHeaders($headers)->post($api_url, $body);
 
@@ -61,7 +61,7 @@ Route::post('/create-payer-test', function (Request $request) {
     if (($data['errors']['internalCode'] ?? null) == 7632) {
         Log::debug('Hit internal code 7632');
 
-        $response = Http::withHeaders($headersWithPayer)->put($api_url, ['statementActivated' => true]);
+        $response = Http::withHeaders($headersWithPayer)->put($api_url, ['statementActived' => true]);
     }
 
     Log::info('Response', $response->json());
@@ -98,7 +98,7 @@ Route::post('/create-account-test', function (Request $request) {
 
     $headers = $body['cpfCnpj'] ? array_merge($headers, ['payercpfcnpj' => $body['cpfCnpj']]) : throw new Exception('error when creating **ACCOUNT**: CPF/CNPJ is required for the next step. Payer probably was not created successfully.');
 
-    $api_url = config('openfinance.url') . 'account';
+    $api_url = config('openfinance.url').'account';
 
     $account = [
         'bankCode' => $body['bankCode'],
@@ -197,7 +197,7 @@ Route::post('/statement-openfinance-test', function (Request $request) {
         $payload['dateEnd'] = $body['dateEnd'];
     }
 
-    $apiUrl = config('openfinance.url') . 'statement/openfinance';
+    $apiUrl = config('openfinance.url').'statement/openfinance';
 
     Log::debug('CREATE STATEMENT PROTOCOL **PAYLOAD: ', $payload);
 
@@ -237,7 +237,7 @@ Route::post('/statement-openfinance-result-test', function (Request $request) {
         'payercpfcnpj' => $body['cpfCnpj'],
     ];
 
-    $apiUrl = config('openfinance.url') . 'statement/openfinance/' . rawurlencode($body['uniqueId']);
+    $apiUrl = config('openfinance.url').'statement/openfinance/'.rawurlencode($body['uniqueId']);
 
     Log::debug('GET STATEMENT RESULT **URL: ', ['url' => $apiUrl]);
 

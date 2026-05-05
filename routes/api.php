@@ -10,7 +10,6 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Http\Controllers\OpenFinanceController;
 use App\Http\Controllers\SubscriptionController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -29,9 +28,7 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 });
 
-Route::middleware('auth:sanctum')->get('/me', function (Request $request) {
-    return $request->user();
-});
+Route::middleware('auth:sanctum')->get('/me', [MeController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/me', [MeController::class, 'update']);
@@ -50,8 +47,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [OpenFinanceController::class, 'index']);
         Route::post('/connect', [OpenFinanceController::class, 'connect']);
         Route::get('/accounts/{account}/remote', [OpenFinanceController::class, 'showRemoteAccount']);
+        Route::delete('/accounts/{account}/disconnect', [OpenFinanceController::class, 'disconnectAccount']);
     });
 
+    Route::get('/transactions/summary', [FinancialTransactionController::class, 'summary']);
     Route::apiResource('transactions', FinancialTransactionController::class)->only([
         'index',
         'show',

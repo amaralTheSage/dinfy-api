@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\FinancialAccount;
 use App\Models\FinancialTransaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class FinancialTransactionController extends Controller
 {
@@ -14,13 +16,18 @@ class FinancialTransactionController extends Controller
         if ($perPage < 1) {
             $perPage = 20;
         }
-        if ($perPage > 200) {
-            $perPage = 200;
+        if ($perPage > 500) {
+            $perPage = 500;
         }
 
-        return $this->transactionsQuery($request)
-            ->latest('occurred_at')
-            ->paginate($perPage);
+        $query = $this->transactionsQuery($request);
+        $accountId = trim((string) ($request->query('accountId') ?? $request->query('account_id') ?? ''));
+
+        if ($accountId !== '') {
+            $query->where('account_id', $this->resolveAccount($request, $accountId)->id);
+        }
+
+        return $query->latest('occurred_at')->paginate($perPage);
     }
 
     public function show(Request $request, string $transaction)
@@ -30,6 +37,45 @@ class FinancialTransactionController extends Controller
             ->firstOrFail();
 
         return response()->json($model);
+    }
+
+    public function summary(Request $request)
+    {
+        $month = trim((string) $request->query('month', now()->format('Y-m')));
+
+        if (! preg_match('/^\d{4}-\d{2}$/', $month)) {
+            throw ValidationException::withMessages([
+                'month' => ['Informe o mes no formato YYYY-MM.'],
+            ]);
+        }
+
+        $start = Carbon::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+
+        $transactions = FinancialTransaction::query()
+            ->where('user_id', $request->user()->id)
+            ->whereBetween('occurred_at', [$start, $end])
+            ->get(['type', 'amount']);
+
+        $income = 0.0;
+        $expenses = 0.0;
+
+        foreach ($transactions as $transaction) {
+            $amount = (float) $transaction->amount;
+            if (strtoupper((string) $transaction->type) === 'CREDIT') {
+                $income += $amount;
+            } else {
+                $expenses += $amount;
+            }
+        }
+
+        return response()->json([
+            'month' => $start->format('Y-m'),
+            'income' => round($income, 2),
+            'expenses' => round($expenses, 2),
+            'balance' => round($income - $expenses, 2),
+            'currency' => 'BRL',
+        ]);
     }
 
     public function store(Request $request)
@@ -81,6 +127,8 @@ class FinancialTransactionController extends Controller
             ->where('user_id', $request->user()->id)
             ->where('id', $transaction)
             ->firstOrFail();
+
+        $this->ensureTransactionCanBeChanged($model);
 
         $validated = $request->validate([
             'accountId' => ['sometimes', 'nullable', 'uuid'],
@@ -139,6 +187,8 @@ class FinancialTransactionController extends Controller
             ->where('id', $transaction)
             ->firstOrFail();
 
+        $this->ensureTransactionCanBeChanged($model);
+
         $model->delete();
 
         return response()->json(['ok' => true]);
@@ -161,5 +211,17 @@ class FinancialTransactionController extends Controller
             ->where('user_id', $request->user()->id)
             ->where('id', $accountId)
             ->firstOrFail();
+    }
+
+    private function ensureTransactionCanBeChanged(FinancialTransaction $transaction): void
+    {
+        $provider = strtolower((string) $transaction->provider);
+        $dataProvider = strtolower((string) data_get($transaction->data, 'provider'));
+
+        if ($provider === 'openfinance' || $dataProvider === 'openfinance') {
+            throw ValidationException::withMessages([
+                'transaction' => ['Transacoes importadas via Open Finance sao somente leitura.'],
+            ]);
+        }
     }
 }

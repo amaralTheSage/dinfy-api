@@ -25,6 +25,8 @@ class UserAddress extends Model
         'city',
     ];
 
+    #UserAddress::create(['user_id'=>5,'zipcode'=>"96015420,'street'=>"Rua Padre Anchieta",'neighborhood'=> "Centro",'address_number'=>"4715",'state'=>"RS",'city'=>"Pelotas"]);
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

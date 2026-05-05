@@ -25,7 +25,10 @@ class OpenFinanceController extends Controller
         $user = $request->user();
         $accounts = FinancialAccount::query()
             ->where('user_id', $user->id)
-            ->whereNotNull('openfinance_account_hash')
+            ->where(function ($query): void {
+                $query->where('subtype', 'openfinance')
+                    ->orWhereNotNull('openfinance_account_hash');
+            })
             ->orderByDesc('openfinance_synced_at')
             ->orderByDesc('created_at')
             ->get()
@@ -174,13 +177,37 @@ class OpenFinanceController extends Controller
             return $this->providerFailure($providerResponse, 'Nao foi possivel consultar a conta Open Finance.');
         }
 
-        $remoteAccount = data_get($providerResponse->json() ?? [], 'accounts', []);
-        $this->refreshOpenFinanceIdentifiers($financialAccount, is_array($remoteAccount) ? $remoteAccount : []);
+        $remoteBody = $providerResponse->json() ?? [];
+        $remoteAccount = is_array($remoteBody) ? $this->firstAccountFromResponse($remoteBody) : [];
+        $this->refreshOpenFinanceIdentifiers($financialAccount, $remoteAccount);
 
         return response()->json([
             'account' => $financialAccount->refresh(),
             'remoteAccount' => $remoteAccount,
         ]);
+    }
+
+    public function disconnectAccount(Request $request, string $account): JsonResponse
+    {
+        $financialAccount = $this->resolveOpenFinanceAccount($request, $account);
+
+        $financialAccount->forceFill([
+            'openfinance_status' => 'disconnected',
+            'openfinance_statement_status' => 'DISCONNECTED',
+            'openfinance_statement_error' => 'Conta desconectada pelo usuario.',
+            'openfinance_next_statement_at' => null,
+            'openfinance_synced_at' => now(),
+        ])->save();
+
+        $financialAccount->delete();
+
+        Log::info('OpenFinance account disconnected.', [
+            'user_id' => $request->user()->id,
+            'financial_account_id' => $financialAccount->id,
+            'account_hash' => $this->maskIdentifier((string) $financialAccount->openfinance_account_hash),
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function createStatementProtocol(Request $request): JsonResponse
@@ -322,6 +349,7 @@ class OpenFinanceController extends Controller
             'addressComplement' => ['nullable', 'string', 'max:255'],
             'state' => ['required', 'string', 'size:2'],
             'city' => ['required', 'string', 'max:255'],
+            'accountType' => ['nullable', 'string', 'in:bank,credit_card'],
             'bankCode' => ['required', 'string', 'regex:/^\d{3}$/'],
             'bankName' => ['nullable', 'string', 'max:255'],
             'agency' => ['required', 'string', 'regex:/^\d{1,10}$/'],
@@ -464,6 +492,7 @@ class OpenFinanceController extends Controller
             'accountNumber' => $validated['accountNumber'],
             'accountNumberDigit' => strtoupper((string) ($validated['accountNumberDigit'] ?? '')),
             'accountDac' => strtoupper((string) ($validated['accountNumberDigit'] ?? '')),
+            'accountType' => $this->providerAccountType($validated),
             'accountPayment' => false,
             'webservice' => false,
             'recipientNotification' => false,
@@ -604,6 +633,12 @@ class OpenFinanceController extends Controller
             return $account;
         }
 
+        $account = data_get($body, 'accounts');
+
+        if (is_array($account) && ! array_is_list($account)) {
+            return $account;
+        }
+
         if (array_is_list($body) && isset($body[0]) && is_array($body[0])) {
             return $body[0];
         }
@@ -627,6 +662,7 @@ class OpenFinanceController extends Controller
             ->first() ?? new FinancialAccount;
 
         $bankName = trim((string) ($validated['bankName'] ?? ''));
+        $accountType = $this->accountType($validated);
         $name = $bankName !== ''
             ? $bankName
             : 'Conta Open Finance '.$validated['bankCode'];
@@ -641,13 +677,14 @@ class OpenFinanceController extends Controller
             'agencyDigit' => strtoupper((string) ($validated['agencyDigit'] ?? '')),
             'accountNumberLast4' => $this->last4($validated['accountNumber']),
             'accountNumberDigit' => strtoupper((string) ($validated['accountNumberDigit'] ?? '')),
+            'accountType' => $accountType,
             'statementActived' => true,
             'updatedAt' => now()->toIso8601String(),
         ]);
 
         $account->fill([
             'user_id' => $user->id,
-            'type' => 'bank',
+            'type' => $accountType,
             'subtype' => 'openfinance',
             'name' => $name,
             'marketing_name' => $bankName !== '' ? $bankName : null,
@@ -661,7 +698,9 @@ class OpenFinanceController extends Controller
             'openfinance_link' => $openfinanceLink ?: $account->openfinance_link,
             'openfinance_status' => $openfinanceId ? 'active' : 'authorization_pending',
             'openfinance_synced_at' => now(),
-            'openfinance_statement_status' => $account->openfinance_statement_status ?: 'WAITING_AUTHORIZATION',
+            'openfinance_statement_status' => $openfinanceId
+                ? $this->statementStatusForAuthorizedAccount($account)
+                : ($account->openfinance_statement_status ?: 'WAITING_AUTHORIZATION'),
             'openfinance_statement_error' => 'As atualizacoes acontecem em segundo plano e nao sao imediatas.',
             'openfinance_next_statement_at' => $openfinanceId ? now() : now()->addHour(),
         ]);
@@ -681,6 +720,7 @@ class OpenFinanceController extends Controller
             'name' => $account->name,
             'bankCode' => data_get($account->data, 'openfinance.bankCode'),
             'bankName' => data_get($account->data, 'openfinance.bankName') ?: $account->marketing_name ?: $account->name,
+            'accountType' => data_get($account->data, 'openfinance.accountType') ?: $account->type,
             'numberLast4' => $account->number_last4,
             'balance' => $account->balance,
             'currency' => $account->currency,
@@ -721,8 +761,38 @@ class OpenFinanceController extends Controller
             'openfinance_id' => $openfinanceId ?: $account->openfinance_id,
             'openfinance_link' => $openfinanceLink ?: $account->openfinance_link,
             'openfinance_status' => $openfinanceId ? 'active' : $account->openfinance_status,
+            'openfinance_statement_status' => $openfinanceId
+                ? $this->statementStatusForAuthorizedAccount($account)
+                : $account->openfinance_statement_status,
             'openfinance_synced_at' => now(),
         ])->save();
+    }
+
+    private function statementStatusForAuthorizedAccount(FinancialAccount $account): string
+    {
+        $current = strtoupper((string) $account->openfinance_statement_status);
+
+        return in_array($current, ['PROCESSING', 'REQUESTED', 'PENDING', 'COMPLETED'], true)
+            ? $current
+            : 'AUTHORIZED';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function accountType(array $validated): string
+    {
+        return ($validated['accountType'] ?? 'bank') === 'credit_card'
+            ? 'credit_card'
+            : 'bank';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function providerAccountType(array $validated): string
+    {
+        return $this->accountType($validated);
     }
 
     /**

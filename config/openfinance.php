@@ -9,5 +9,6 @@ return [
         'pending_check_interval_minutes' => (int) env('OPENFINANCE_STATEMENT_PENDING_CHECK_INTERVAL_MINUTES', 15),
         'lookback_days' => (int) env('OPENFINANCE_STATEMENT_LOOKBACK_DAYS', 7),
         'batch_size' => (int) env('OPENFINANCE_STATEMENT_SYNC_BATCH_SIZE', 10),
+        'log_statement_payloads' => (bool) env('OPENFINANCE_LOG_STATEMENT_PAYLOADS', true),
     ],
 ];

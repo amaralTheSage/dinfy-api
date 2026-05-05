@@ -71,6 +71,6 @@ class FinancialTransaction extends Model
 
     public function account(): BelongsTo
     {
-        return $this->belongsTo(FinancialAccount::class, 'account_id');
+        return $this->belongsTo(FinancialAccount::class, 'account_id')->withTrashed();
     }
 }

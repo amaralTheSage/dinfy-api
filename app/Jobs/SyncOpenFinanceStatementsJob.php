@@ -17,6 +17,10 @@ class SyncOpenFinanceStatementsJob implements ShouldQueue
 
     public function handle(OpenFinanceStatementSyncService $syncService): void
     {
+        Log::info('SyncOpenFinanceStatementsJob started.', [
+            'limit' => $this->limit,
+        ]);
+
         $stats = $syncService->handle($this->limit);
 
         Log::info('SyncOpenFinanceStatementsJob completed.', $stats);

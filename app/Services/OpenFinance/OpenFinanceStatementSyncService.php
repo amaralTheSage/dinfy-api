@@ -128,6 +128,8 @@ class OpenFinanceStatementSyncService
         }
 
         $body = $response->json() ?? [];
+        $this->logStatementPayload($account, $body);
+
         if (! is_array($body) || (! array_key_exists('statement', $body) && strtoupper((string) data_get($body, 'status')) === 'PROCESSING')) {
             $this->markStatementPending($account, data_get($body, 'status', 'PROCESSING'));
 
@@ -153,6 +155,20 @@ class OpenFinanceStatementSyncService
         ]);
 
         return $imported;
+    }
+
+    private function logStatementPayload(FinancialAccount $account, mixed $body): void
+    {
+        if (! (bool) config('openfinance.statement_sync.log_statement_payloads', false)) {
+            return;
+        }
+
+        Log::info('OpenFinance statement payload received by cron.', [
+            'financial_account_id' => $account->id,
+            'user_id' => $account->user_id,
+            'unique_id' => $this->maskIdentifier((string) $account->openfinance_last_statement_unique_id),
+            'payload' => $body,
+        ]);
     }
 
     /**
@@ -219,10 +235,8 @@ class OpenFinanceStatementSyncService
             return;
         }
 
-        $remoteAccount = data_get($response->json() ?? [], 'accounts', []);
-        if (! is_array($remoteAccount)) {
-            $remoteAccount = [];
-        }
+        $remoteBody = $response->json() ?? [];
+        $remoteAccount = is_array($remoteBody) ? $this->firstAccountFromResponse($remoteBody) : [];
 
         $openfinanceId = data_get($remoteAccount, 'openfinanceId');
         $openfinanceLink = data_get($remoteAccount, 'openfinanceLink');
@@ -231,6 +245,9 @@ class OpenFinanceStatementSyncService
             'openfinance_id' => $openfinanceId ?: $account->openfinance_id,
             'openfinance_link' => $openfinanceLink ?: $account->openfinance_link,
             'openfinance_status' => $openfinanceId ? 'active' : 'authorization_pending',
+            'openfinance_statement_status' => $openfinanceId
+                ? $this->statementStatusForAuthorizedAccount($account)
+                : 'WAITING_AUTHORIZATION',
             'openfinance_statement_error' => $openfinanceId ? null : 'Aguardando autorizacao do banco.',
             'openfinance_synced_at' => now(),
             'openfinance_next_statement_at' => $openfinanceId ? now() : now()->addMinutes($this->rateLimitMinutes()),
@@ -431,7 +448,7 @@ class OpenFinanceStatementSyncService
             'currency' => 'BRL',
             'occurred_at' => $date,
             'description' => $this->truncate($payload['description'] ?? null, 255),
-            'merchant' => $this->truncate($payload['name'] ?? null, 255),
+            'merchant' => $this->truncate($payload['creditCardMerchant']['name'] ?? $payload['name'] ?? null, 255),
             'category' => $this->truncate($payload['category'] ?? null, 100),
             'data' => [
                 'provider' => self::PROVIDER,
@@ -481,6 +498,19 @@ class OpenFinanceStatementSyncService
     private function statementPayload(FinancialAccount $account): array
     {
         $dateEnd = now()->toDateString();
+
+        if (
+            $account->openfinance_last_statement_requested_at === null
+            && $account->openfinance_last_statement_result_at === null
+        ) {
+            return [
+                'today' => false,
+                'accountHash' => $account->openfinance_account_hash,
+                'dateStart' => $this->initialStatementStartDate($account),
+                'dateEnd' => $dateEnd,
+            ];
+        }
+
         $lookbackStart = now()->subDays($this->lookbackDays())->toDateString();
         $lastResultStart = $account->openfinance_last_statement_result_at
             ? $account->openfinance_last_statement_result_at->copy()->subDay()->toDateString()
@@ -496,6 +526,17 @@ class OpenFinanceStatementSyncService
             'dateStart' => $dateStart,
             'dateEnd' => $dateEnd,
         ];
+    }
+
+    private function initialStatementStartDate(FinancialAccount $account): string
+    {
+        $account->loadMissing('user');
+
+        $createdAt = $account->user instanceof User && $account->user->created_at instanceof Carbon
+            ? $account->user->created_at
+            : now();
+
+        return $createdAt->copy()->subMonthNoOverflow()->toDateString();
     }
 
     private function markResultFailure(FinancialAccount $account, ClientResponse $response): void
@@ -543,10 +584,45 @@ class OpenFinanceStatementSyncService
     {
         $account->forceFill([
             'openfinance_status' => 'authorization_pending',
+            'openfinance_statement_status' => 'WAITING_AUTHORIZATION',
             'openfinance_statement_error' => $message,
             'openfinance_synced_at' => now(),
             'openfinance_next_statement_at' => now()->addMinutes($this->rateLimitMinutes()),
         ])->save();
+    }
+
+    private function statementStatusForAuthorizedAccount(FinancialAccount $account): string
+    {
+        $current = strtoupper((string) $account->openfinance_statement_status);
+
+        return in_array($current, ['PROCESSING', 'REQUESTED', 'PENDING', 'COMPLETED'], true)
+            ? $current
+            : 'AUTHORIZED';
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function firstAccountFromResponse(array $body): array
+    {
+        $account = data_get($body, 'accounts.0');
+
+        if (is_array($account)) {
+            return $account;
+        }
+
+        $account = data_get($body, 'accounts');
+
+        if (is_array($account) && ! array_is_list($account)) {
+            return $account;
+        }
+
+        if (array_is_list($body) && isset($body[0]) && is_array($body[0])) {
+            return $body[0];
+        }
+
+        return [];
     }
 
     private function nextAllowedStatementAt(?Carbon $lastRequestedAt): Carbon
