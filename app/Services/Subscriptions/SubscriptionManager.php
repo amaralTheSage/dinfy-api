@@ -79,21 +79,14 @@ class SubscriptionManager
         ?string $payerDocument = null,
         ?string $payerDocumentType = 'CPF',
     ): UserSubscription {
-        Log::info('3. Entrou em SubscriptionManager@createCheckout', [
-            'user_id' => $user->id,
-            'plan' => $planCode,
-        ]);
+        Log::info('SubscriptionManager@createCheckout was hit.');
 
         $plan = $this->requirePlan($user, $planCode);
         $this->ensureUserDoesNotHaveOpenSubscription($user);
 
         $externalReference = $this->generateExternalReference($user, $planCode);
 
-        Log::info('4. Validacoes de negocio concluidas em SubscriptionManager@createCheckout', [
-            'user_id' => $user->id,
-            'plan' => $planCode,
-            'external_reference' => $externalReference,
-        ]);
+        Log::info('SubscriptionManager@createCheckout business validation completed.');
 
         $resolvedPayerEmail = $this->requirePendingPayerEmail($payerEmail ?? $user->email);
         $resolvedPayerDocument = $this->requirePendingPayerDocument(
@@ -186,10 +179,7 @@ class SubscriptionManager
             return $plan;
         }
 
-        Log::warning('4. Plano invalido em SubscriptionManager@createCheckout', [
-            'user_id' => $user->id,
-            'plan' => $planCode,
-        ]);
+        Log::warning('SubscriptionManager@createCheckout invalid plan.');
 
         throw ValidationException::withMessages([
             'plan' => ['Plano de assinatura invalido.'],
@@ -203,11 +193,7 @@ class SubscriptionManager
             return;
         }
 
-        Log::warning('4. Usuario ja possui assinatura em aberto em SubscriptionManager@createCheckout', [
-            'user_id' => $user->id,
-            'current_subscription_id' => $current->id,
-            'current_status' => $current->status->value,
-        ]);
+        Log::warning('SubscriptionManager@createCheckout open subscription already exists.');
 
         throw ValidationException::withMessages([
             'plan' => ['Ja existe uma assinatura em andamento para este usuario.'],
@@ -238,18 +224,13 @@ class SubscriptionManager
 
     private function cancelPendingSubscription(UserSubscription $subscription): UserSubscription
     {
-        Log::info('4. Assinatura pendente encontrada em SubscriptionManager@cancelCurrent', [
-            'subscription_id' => $subscription->id,
-        ]);
+        Log::info('SubscriptionManager@cancelCurrent pending subscription found.');
 
         if (
             $subscription->mercado_pago_payment_id
             && in_array(strtolower((string) $subscription->latest_payment_status), self::PAYMENT_PENDING_STATUSES, true)
         ) {
-            Log::info('5. Cancelando pagamento standalone em SubscriptionManager@cancelCurrent', [
-                'subscription_id' => $subscription->id,
-                'payment_id' => $subscription->mercado_pago_payment_id,
-            ]);
+            Log::info('SubscriptionManager@cancelCurrent standalone payment cancellation triggered.');
 
             $payload = $this->mercadoPago->cancelPayment($subscription->mercado_pago_payment_id);
 
@@ -266,10 +247,10 @@ class SubscriptionManager
     private function requirePendingPayerEmail(?string $payerEmail): string
     {
         $resolved = trim((string) $payerEmail);
-        Log::info('5. Validando payer_email em SubscriptionManager@requirePendingPayerEmail');
+        Log::info('SubscriptionManager@requirePendingPayerEmail was hit.');
 
         if ($resolved === '') {
-            Log::warning('5. Falha na validação do payer_email em SubscriptionManager@requirePendingPayerEmail');
+            Log::warning('SubscriptionManager@requirePendingPayerEmail validation failed.');
 
             throw ValidationException::withMessages([
                 'payer_email' => ['Informe um e-mail valido para gerar o pagamento PIX.'],
@@ -287,10 +268,7 @@ class SubscriptionManager
         $resolvedType = strtoupper(trim($payerDocumentType));
         $normalizedNumber = preg_replace('/\D+/', '', (string) $payerDocument) ?? '';
 
-        Log::info('5. Validando payer_document em SubscriptionManager@requirePendingPayerDocument', [
-            'type' => $resolvedType,
-            'length' => strlen($normalizedNumber),
-        ]);
+        Log::info('SubscriptionManager@requirePendingPayerDocument was hit.');
 
         if ($resolvedType === '') {
             $resolvedType = 'CPF';
@@ -440,19 +418,11 @@ class SubscriptionManager
                 return $current;
             }
 
-            Log::warning('Expired subscription recovery validation failed.', [
-                'user_id' => $user->id,
-                'subscription_id' => $subscription->id,
-                'errors' => $exception->errors(),
-            ]);
+            Log::warning('Expired subscription recovery validation failed.');
 
             return $subscription->fresh() ?? $subscription;
         } catch (\Throwable $exception) {
-            Log::warning('Expired subscription recovery failed.', [
-                'user_id' => $user->id,
-                'subscription_id' => $subscription->id,
-                'message' => $exception->getMessage(),
-            ]);
+            Log::warning('Expired subscription recovery failed.');
 
             return $subscription->fresh() ?? $subscription;
         }
@@ -460,16 +430,12 @@ class SubscriptionManager
 
     public function cancelCurrent(User $user): UserSubscription
     {
-        Log::info('2. Entrou em SubscriptionManager@cancelCurrent', [
-            'user_id' => $user->id,
-        ]);
+        Log::info('SubscriptionManager@cancelCurrent was hit.');
 
         $subscription = $this->currentOpenSubscription($user);
 
         if (! $subscription) {
-            Log::warning('. Nenhuma assinatura cancelavel encontrada em SubscriptionManager@cancelCurrent', [
-                'user_id' => $user->id,
-            ]);
+            Log::warning('SubscriptionManager@cancelCurrent no cancelable subscription found.');
 
             throw ValidationException::withMessages([
                 'subscription' => ['Nenhuma assinatura ativa foi encontrada para cancelamento.'],
@@ -485,14 +451,14 @@ class SubscriptionManager
 
     public function handleWebhook(Request $request): void
     {
-        Log::info('2. Entrou em SubscriptionManager@handleWebhook');
+        Log::info('SubscriptionManager@handleWebhook was hit.');
 
         if (
             $this->mercadoPago->hasWebhookSecret()
             && $this->shouldValidateWebhookSignature($request)
             && ! $this->mercadoPago->isValidWebhookSignature($request)
         ) {
-            Log::warning('3. Assinatura do webhook invalida em SubscriptionManager@handleWebhook');
+            Log::warning('SubscriptionManager@handleWebhook invalid signature.');
 
             abort(401, 'Invalid Mercado Pago signature.');
         }
@@ -502,10 +468,7 @@ class SubscriptionManager
 
         match ($type) {
             'payment' => $resourceId !== '' ? $this->syncPayment($resourceId) : null,
-            default => Log::info('Mercado Pago webhook ignored.', [
-                'type' => $type,
-                'resource_id' => $resourceId,
-            ]),
+            default => Log::info('Mercado Pago webhook ignored.'),
         };
     }
 
@@ -527,10 +490,7 @@ class SubscriptionManager
         ) !== '';
 
         if ($hasIpnTopic && $hasIpnResourceId) {
-            Log::info('Mercado Pago IPN received; skipping webhook signature validation.', [
-                'topic' => $request->query('topic') ?? $request->input('topic'),
-                'resource_id' => $request->query('id') ?? $request->input('id') ?? $request->input('resource'),
-            ]);
+            Log::info('Mercado Pago IPN received; skipping webhook signature validation.');
 
             return false;
         }
@@ -590,18 +550,13 @@ class SubscriptionManager
 
     public function syncPayment(string $paymentId): ?UserSubscription
     {
-        Log::info('4. Entrou em SubscriptionManager@syncPayment', [
-            'payment_id' => $paymentId,
-        ]);
+        Log::info('SubscriptionManager@syncPayment was hit.');
 
         $payload = $this->mercadoPago->fetchPayment($paymentId);
         $subscription = $this->resolveSubscriptionFromPaymentPayload($payload, $paymentId);
 
         if (! $subscription) {
-            Log::info('Mercado Pago payment ignored because no local subscription was found.', [
-                'payment_id' => $paymentId,
-                'external_reference' => Arr::get($payload, 'external_reference'),
-            ]);
+            Log::info('Mercado Pago payment ignored because no local subscription was found.');
 
             return null;
         }
@@ -697,10 +652,7 @@ class SubscriptionManager
         array $payload,
         ?string $fallbackPaymentId = null,
     ): UserSubscription {
-        Log::info('8. Aplicando payload de pagamento em SubscriptionManager@applyPaymentPayload', [
-            'subscription_id' => $subscription->id,
-            'payment_id' => Arr::get($payload, 'id', $fallbackPaymentId),
-        ]);
+        Log::info('SubscriptionManager@applyPaymentPayload was hit.');
 
         $paymentStatus = (string) (
             Arr::get($payload, 'payment.status')
@@ -753,11 +705,7 @@ class SubscriptionManager
             'last_notified_at' => now(),
         ]);
 
-        Log::info('9. Payload de pagamento aplicado em SubscriptionManager@applyPaymentPayload', [
-            'subscription_id' => $subscription->id,
-            'status' => $status->value,
-            'payment_status' => $paymentStatus,
-        ]);
+        Log::info('SubscriptionManager@applyPaymentPayload completed.');
 
         return $this->persistSubscription($subscription);
     }
@@ -772,9 +720,7 @@ class SubscriptionManager
 
     public function syncUserSummary(User $user): void
     {
-        Log::info('8. Atualizando resumo da assinatura do usuario em SubscriptionManager@syncUserSummary', [
-            'user_id' => $user->id,
-        ]);
+        Log::info('SubscriptionManager@syncUserSummary was hit.');
 
         $current = $this->currentSubscriptionQuery($user)->first();
 
@@ -930,9 +876,7 @@ class SubscriptionManager
 
     private function cancelLocalStandaloneSubscription(UserSubscription $subscription): UserSubscription
     {
-        Log::info('8. Cancelando assinatura local sem recorrencia do Mercado Pago', [
-            'subscription_id' => $subscription->id,
-        ]);
+        Log::info('SubscriptionManager@cancelLocalStandaloneSubscription was hit.');
 
         $subscription->forceFill([
             'status' => SubscriptionStatus::Canceled,
@@ -946,9 +890,7 @@ class SubscriptionManager
 
     private function cancelLocalPendingCheckout(UserSubscription $subscription): UserSubscription
     {
-        Log::info('8. Cancelando assinatura pendente local em SubscriptionManager@cancelLocalPendingCheckout', [
-            'subscription_id' => $subscription->id,
-        ]);
+        Log::info('SubscriptionManager@cancelLocalPendingCheckout was hit.');
 
         $subscription->forceFill([
             'status' => SubscriptionStatus::Canceled,

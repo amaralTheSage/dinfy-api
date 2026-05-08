@@ -14,19 +14,11 @@ class MercadoPagoWebhookController extends Controller
 
     public function __invoke(Request $request)
     {
-        Log::info('REQUEST DO WEBHOOK COMPLETO: ', ['request' => $request]);
-
-        Log::info('1. Entrou em MercadoPagoWebhookController@__invoke', [
-            'type' => $request->input('type') ?? $request->query('type'),
-            'topic' => $request->input('topic') ?? $request->query('topic'),
-            'data_id' => $request->query('data.id') ?? data_get($request->all(), 'data.id'),
-            'id' => $request->query('id') ?? $request->input('id'),
-            'resource' => $request->input('resource'),
-        ]);
+        Log::info('MercadoPagoWebhookController@__invoke was hit.');
 
         $this->subscriptions->handleWebhook($request);
 
-        Log::info('9. MercadoPagoWebhookController@__invoke finalizado com sucesso');
+        Log::info('MercadoPagoWebhookController@__invoke completed.');
 
         return response()->json([
             'ok' => true,

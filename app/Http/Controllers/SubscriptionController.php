@@ -37,7 +37,7 @@ class SubscriptionController extends Controller
 
     public function checkout(Request $request)
     {
-        Log::info('1. Entrou em SubscriptionController@checkout');
+        Log::info('SubscriptionController@checkout was hit.');
 
         try {
             $validated = $request->validate([
@@ -46,16 +46,12 @@ class SubscriptionController extends Controller
                 'payer_document' => ['required', 'string', 'max:30'],
             ]);
         } catch (ValidationException $e) {
-            Log::warning('2. Falha na validação em SubscriptionController@checkout', [
-                'errors' => $e->errors(),
-            ]);
+            Log::warning('SubscriptionController@checkout validation failed.');
 
             throw $e;
         }
 
-        Log::info('2. Validação concluida em SubscriptionController@checkout', [
-            'plan' => $validated['plan'],
-        ]);
+        Log::info('SubscriptionController@checkout validation completed.');
 
         $subscription = $this->subscriptions->createCheckout(
             $request->user(),
@@ -64,11 +60,7 @@ class SubscriptionController extends Controller
             (string) $validated['payer_document'],
         );
 
-        Log::info('9. SubscriptionController@checkout finalizado com sucesso', [
-            'subscription_id' => $subscription->id,
-            'plan' => $validated['plan'],
-            'status' => $subscription->status->value,
-        ]);
+        Log::info('SubscriptionController@checkout completed.');
 
         return response()->json([
             'subscription' => $this->serializeSubscription($subscription),
@@ -77,14 +69,11 @@ class SubscriptionController extends Controller
 
     public function cancel(Request $request)
     {
-        Log::info('1. Entrou em SubscriptionController@cancel');
+        Log::info('SubscriptionController@cancel was hit.');
 
         $subscription = $this->subscriptions->cancelCurrent($request->user());
 
-        Log::info('9. SubscriptionController@cancel finalizado com sucesso', [
-            'subscription_id' => $subscription->id,
-            'status' => $subscription->status->value,
-        ]);
+        Log::info('SubscriptionController@cancel completed.');
 
         return response()->json([
             'subscription' => $this->serializeSubscription($subscription),

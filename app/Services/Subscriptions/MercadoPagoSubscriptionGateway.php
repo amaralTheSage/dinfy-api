@@ -23,10 +23,7 @@ class MercadoPagoSubscriptionGateway
      */
     public function createPixPayment(array $data): array
     {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@createPixPayment', [
-            'external_reference' => $data['external_reference'] ?? null,
-            'transaction_amount' => $data['transaction_amount'] ?? null,
-        ]);
+        Log::info('MercadoPagoSubscriptionGateway@createPixPayment was hit.');
 
         $payer = [
             'email' => $data['payer_email'] ?? null,
@@ -72,11 +69,7 @@ class MercadoPagoSubscriptionGateway
                 ->throw()
                 ->json());
         } catch (RequestException $exception) {
-            Log::error('Mercado Pago payment request failed.', [
-                'payload' => $payload,
-                'response_status' => $exception->response?->status(),
-                'response_body' => $exception->response?->body(),
-            ]);
+            Log::error('Mercado Pago payment request failed.');
 
             throw $exception;
         }
@@ -87,9 +80,7 @@ class MercadoPagoSubscriptionGateway
      */
     public function cancelPayment(string $paymentId): array
     {
-        Log::info('6. Entrou em MercadoPagoSubscriptionGateway@cancelPayment', [
-            'payment_id' => $paymentId,
-        ]);
+        Log::info('MercadoPagoSubscriptionGateway@cancelPayment was hit.');
 
         return $this->normalizePayloadStatuses($this->request()
             ->put('/v1/payments/'.urlencode($paymentId), [
@@ -104,9 +95,7 @@ class MercadoPagoSubscriptionGateway
      */
     public function fetchPayment(string $paymentId): array
     {
-        Log::info('5. Entrou em MercadoPagoSubscriptionGateway@fetchPayment', [
-            'payment_id' => $paymentId,
-        ]);
+        Log::info('MercadoPagoSubscriptionGateway@fetchPayment was hit.');
 
         return $this->normalizePayloadStatuses($this->request()
             ->get('/v1/payments/'.urlencode($paymentId))
